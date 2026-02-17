@@ -4,7 +4,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2025  # Switched to 2025 for better stability
+    runs-on: windows-latest
     steps:
     - name: Connect to Tailscale
       shell: pwsh
@@ -14,31 +14,31 @@ jobs:
         Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
         & 'C:\Program Files\Tailscale\tailscale.exe' up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
         
-    - name: Force Install Drivers (Silent)
+    - name: Silent Driver Injection
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        # 1. Install Parsec (This one usually works with /silent)
+        # 1. Install Parsec
         curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
         Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
         
-        # 2. Extract and Force-Install VDD using nefcon
+        # 2. Extract Driver Files directly (Bypassing the .exe installer)
         mkdir VDD
         curl.exe -L -o VDD.zip https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/v24.12.24/Signed-Driver-v24.12.24-x64.zip
         Expand-Archive VDD.zip -DestinationPath .\VDD
         
-        # Download nefcon to force the install without prompts
+        # 3. Use nefcon to force-install the driver without prompts
         curl.exe -L -o nefcon.exe https://github.com/nefarius/nefcon/releases/download/v1.14.0/nefcon_x64.exe
         .\nefcon.exe --install-driver .\VDD\MttVDD.inf
         
-        # 3. Setup User Password
+        # 4. Final Setup
         net user runneradmin GamingVM123!
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is Ready. Device should appear in Tailscale now!"
+        Write-Host "VM is Ready. Connect via RDP/RustDesk to login to Parsec!"
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
