@@ -1,12 +1,10 @@
-name: Ultimate-Gaming-VM
+name: Ultimate-Fix-VM
 on: 
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
-    permissions:
-      contents: write
     steps:
     - name: Connect to Tailscale
       shell: pwsh
@@ -16,33 +14,23 @@ jobs:
         Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
         & 'C:\Program Files\Tailscale\tailscale.exe' up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
         
-    - name: Force Install Drivers
-      continue-on-error: true  # Prevents exit code 1 from killing the whole job
+    - name: Install Apps (Ignore Errors)
+      continue-on-error: true  # <--- THIS PREVENTS THE "EXIT CODE 1" CRASH
       shell: pwsh
       run: |
-        $ProgressPreference = 'SilentlyContinue'
-        # Install Parsec
+        # 1. Install Parsec
         curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
         Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
         
-        # Install Virtual Display Driver (Direct Download)
-        mkdir VDD
-        curl.exe -L -o VDD.zip https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/v24.12.24/Signed-Driver-v24.12.24-x64.zip
-        Expand-Archive VDD.zip -DestinationPath .\VDD
-        
-        # Using a force-install tool (nefcon)
-        curl.exe -L -o nefcon.exe https://github.com/nefarius/nefcon/releases/download/v1.14.0/nefcon_x64.exe
-        .\nefcon.exe --install-driver .\VDD\MttVDD.inf
-        
-    - name: Finalize Windows Settings
-      run: |
+        # 2. Setup Password
         net user runneradmin GamingVM123!
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is running despite previous errors!"
+        Write-Host "The VM is now ONLINE even if errors happened above."
+        Write-Host "Connect via RDP to manually run the Driver Installer!"
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
