@@ -1,33 +1,40 @@
 name: Parsec-Gaming-VM
-on: workflow_dispatch
+on: 
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Setup Tailscale
-      run: |
-        Invoke-WebRequest https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe -OutFile tailscale-setup.exe
-        Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
     - name: Connect to Tailscale
       shell: pwsh
       run: |
+        # Using curl for reliability
+        curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
+        Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
         & 'C:\Program Files\Tailscale\tailscale.exe' up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
-    - name: Install Virtual Display & Parsec
+        
+    - name: Install Parsec and Virtual Display
       shell: pwsh
       run: |
         # 1. Install Parsec
-        Invoke-WebRequest "https://builds.parsec.app/package/parsec-windows.exe" -Outfile "parsec.exe"
+        curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
         Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
         
-        # 2. Install Virtual Display Driver (Crucial for Headless)
-        Invoke-WebRequest "https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/latest/download/VirtualDisplayDriver.exe" -Outfile "vdd.exe"
-        Start-Process .\vdd.exe -ArgumentList "/S" -Wait
+        # 2. Install Virtual Display Driver (Using official itsmikethetech installer)
+        curl.exe -L -o vdd_installer.exe https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/25.5.2/Virtual.Display.Driver-v25.05.03-setup-x64.exe
+        Start-Process .\vdd_installer.exe -ArgumentList "/S" -Wait
         
-        # 3. Configure Windows for Remote Access
+        # 3. Setup User Password
         net user runneradmin GamingVM123!
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - name: Keep Alive
+
+    - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM Ready. Login to Parsec inside the VM via RDP first!"
-        Start-Sleep -Seconds 21600
+        Write-Host "VM is Ready. Check Tailscale and login to Parsec inside the VM first!"
+        $i = 0
+        while($i -lt 360) {
+          Start-Sleep -Seconds 60
+          $i++
+        }
