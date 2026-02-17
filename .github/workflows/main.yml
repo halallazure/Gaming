@@ -4,26 +4,32 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025  # Switched to 2025 for better stability
     steps:
     - name: Connect to Tailscale
       shell: pwsh
       run: |
-        # Using curl for reliability
+        $ProgressPreference = 'SilentlyContinue'
         curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
         Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
         & 'C:\Program Files\Tailscale\tailscale.exe' up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
         
-    - name: Install Parsec and Virtual Display
+    - name: Force Install Drivers (Silent)
       shell: pwsh
       run: |
-        # 1. Install Parsec
+        $ProgressPreference = 'SilentlyContinue'
+        # 1. Install Parsec (This one usually works with /silent)
         curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
         Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
         
-        # 2. Install Virtual Display Driver (Using official itsmikethetech installer)
-        curl.exe -L -o vdd_installer.exe https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/25.5.2/Virtual.Display.Driver-v25.05.03-setup-x64.exe
-        Start-Process .\vdd_installer.exe -ArgumentList "/S" -Wait
+        # 2. Extract and Force-Install VDD using nefcon
+        mkdir VDD
+        curl.exe -L -o VDD.zip https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/v24.12.24/Signed-Driver-v24.12.24-x64.zip
+        Expand-Archive VDD.zip -DestinationPath .\VDD
+        
+        # Download nefcon to force the install without prompts
+        curl.exe -L -o nefcon.exe https://github.com/nefarius/nefcon/releases/download/v1.14.0/nefcon_x64.exe
+        .\nefcon.exe --install-driver .\VDD\MttVDD.inf
         
         # 3. Setup User Password
         net user runneradmin GamingVM123!
@@ -32,7 +38,7 @@ jobs:
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is Ready. Check Tailscale and login to Parsec inside the VM first!"
+        Write-Host "VM is Ready. Device should appear in Tailscale now!"
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
