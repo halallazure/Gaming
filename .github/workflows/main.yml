@@ -1,10 +1,12 @@
-name: Parsec-Gaming-VM
+name: Ultimate-Gaming-VM
 on: 
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
     - name: Connect to Tailscale
       shell: pwsh
@@ -14,31 +16,33 @@ jobs:
         Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
         & 'C:\Program Files\Tailscale\tailscale.exe' up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
         
-    - name: Silent Driver Injection
+    - name: Force Install Drivers
+      continue-on-error: true  # Prevents exit code 1 from killing the whole job
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        # 1. Install Parsec
+        # Install Parsec
         curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
         Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
         
-        # 2. Extract Driver Files directly (Bypassing the .exe installer)
+        # Install Virtual Display Driver (Direct Download)
         mkdir VDD
         curl.exe -L -o VDD.zip https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/v24.12.24/Signed-Driver-v24.12.24-x64.zip
         Expand-Archive VDD.zip -DestinationPath .\VDD
         
-        # 3. Use nefcon to force-install the driver without prompts
+        # Using a force-install tool (nefcon)
         curl.exe -L -o nefcon.exe https://github.com/nefarius/nefcon/releases/download/v1.14.0/nefcon_x64.exe
         .\nefcon.exe --install-driver .\VDD\MttVDD.inf
         
-        # 4. Final Setup
+    - name: Finalize Windows Settings
+      run: |
         net user runneradmin GamingVM123!
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is Ready. Connect via RDP/RustDesk to login to Parsec!"
+        Write-Host "VM is running despite previous errors!"
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
