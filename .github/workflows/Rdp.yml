@@ -1,31 +1,23 @@
-name: Connect-RDP
-on: workflow_dispatch
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-    - name: Download AnyDesk
-      run: curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-
-    - name: Set Password (Fix)
+    - name: Force Get AnyDesk ID
       run: |
-        # In PowerShell, we pipe the password into AnyDesk to avoid parameter errors
-        echo "MySafePassword123!" | ./anydesk.exe --set-password
-      shell: pwsh
+        # 1. Start the process and wait for it to generate the ID file
+        ./anydesk.exe --service &
+        Start-Sleep -Seconds 20
+        
+        # 2. Try method A: Standard CLI command
+        $cmdID = ./anydesk.exe --get-id
+        
+        # 3. Try method B: Read from the internal system config file
+        $configPath = "$env:AppData\AnyDesk\system.conf"
+        if (Test-Path $configPath) {
+            $fileID = Select-String -Path $configPath -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Value -replace "ad.anynet.id=","" }
+        }
 
-    - name: Get AnyDesk ID
-      run: |
-        # Give the service 15 seconds to start and generate an ID
-        Start-Sleep -Seconds 15
-        $ID = ./anydesk.exe --get-id
+        # 4. Display the results clearly
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "ANYDESK ID: $ID" -ForegroundColor Cyan
+        if ($cmdID) { Write-Host "METHOD A (CLI) ID: $cmdID" -ForegroundColor Cyan }
+        if ($fileID) { Write-Host "METHOD B (FILE) ID: $fileID" -ForegroundColor Cyan }
+        if (!$cmdID -and !$fileID) { Write-Host "ERROR: ID not generated yet. Try re-running." -ForegroundColor Red }
         Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
         Write-Host "------------------------------------------------" -ForegroundColor Green
-      shell: pwsh
-
-    - name: Keep Alive
-      run: |
-        Write-Host "Session is active. Connect from your Redmi Pad now."
-        while($true){ Start-Sleep -Seconds 60 }
       shell: pwsh
