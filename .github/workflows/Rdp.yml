@@ -1,23 +1,9 @@
-    - name: 3. FORCE REVEAL ID (2026 Fix)
+    - name: AnyDesk Reset & Reveal
       run: |
-        # 1. Give the network 45 seconds to assign an ID
+        # Nuke old service files to force a new ID generation
+        Remove-Item -Path "$env:ProgramData\AnyDesk\service.conf" -ErrorAction SilentlyContinue
+        ./anydesk.exe --service &
         Start-Sleep -Seconds 45
-        
-        # 2. Extract from the config file (The most reliable way)
-        $conf = "$env:AppData\RustDesk\config\RustDesk.toml"
-        if (Test-Path $conf) {
-          $ID = Select-String -Path $conf -Pattern 'id = "(.*)"' | ForEach-Object { $_.Matches.Groups[1].Value }
-        }
-        
-        # 3. Force output to Host so you can see it
-        Write-Host "------------------------------------------------" -ForegroundColor Green
-        if ($ID) {
-          Write-Host "YOUR REMOTE ID: $ID" -ForegroundColor Cyan
-        } else {
-          # Fallback: Try the command line with out-host
-          Write-Host "Trying Command Line Backup..." -ForegroundColor Yellow
-          ./rustdesk.exe --get-id | Out-Host
-        }
-        Write-Host "YOUR PASSWORD: MySafePassword123!" -ForegroundColor Yellow
-        Write-Host "------------------------------------------------" -ForegroundColor Green
+        # Read the ID from the system config
+        Get-Content "C:\ProgramData\AnyDesk\system.conf" | Select-String "ad.anynet.id="
       shell: pwsh
