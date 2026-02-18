@@ -1,24 +1,36 @@
-    - name: Start AnyDesk Service
+name: Connect-RDP
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: windows-2022 # Using 2022 for better compatibility
+    steps:
+    - name: Download AnyDesk
+      run: curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+
+    - name: Start AnyDesk and Set Password
       run: |
-        # Start AnyDesk as a background service to ensure ID generation
-        ./anydesk.exe --service &
-        Start-Sleep -Seconds 30
+        ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
+        echo "MySafePassword123!" | C:\AnyDesk\AnyDesk.exe --set-password
       shell: pwsh
 
-    - name: Get AnyDesk ID (Two Methods)
+    - name: REVEAL ANYDESK ID
       run: |
-        # Method 1: Standard Command
-        $ID_CMD = ./anydesk.exe --get-id
+        Start-Sleep -Seconds 20
+        # Method: Read directly from the Registry
+        $RegistryPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
+        $ID = (Get-ItemProperty -Path $RegistryPath).ad_anynet_id
         
-        # Method 2: Read from system.conf file (Deep Search)
-        $confPath = "$env:AppData\AnyDesk\system.conf"
-        if (Test-Path $confPath) {
-          $ID_FILE = Select-String -Path $confPath -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        }
-
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "ANYDESK ID (CMD): $ID_CMD" -ForegroundColor Cyan
-        Write-Host "ANYDESK ID (FILE): $ID_FILE" -ForegroundColor Cyan
-        Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
+        if ($ID) {
+            Write-Host "YOUR ANYDESK ID IS: $ID" -ForegroundColor Cyan
+        } else {
+            # Backup: Check the system.conf file
+            $ID_FILE = Select-String -Path "$env:ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+            Write-Host "YOUR ANYDESK ID IS: $ID_FILE" -ForegroundColor Cyan
+        }
+        Write-Host "YOUR PASSWORD IS: MySafePassword123!" -ForegroundColor Yellow
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
+
+    - name: Keep Alive
+      run: while($true){ Start-Sleep -Seconds 60 }
