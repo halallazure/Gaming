@@ -1,47 +1,36 @@
-name: Deep-Force-Gaming-VM
+name: AnyDesk-Direct-VM
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Setup System & AnyDesk
+    - name: Setup AnyDesk (Direct Execution)
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        # 1. Install AnyDesk to a custom path
+        # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        .\anydesk.exe --install "C:\AD" --start-with-win --silent
-        echo "Gaming123" | & "C:\AD\AnyDesk.exe" --set-password
         
-        # 2. Setup Windows User (Backup Access)
-        net user runneradmin GamingVM123! /add
-        net localgroup administrators runneradmin /add
+        # 2. Install as a service to a standard path
+        .\anydesk.exe --install "C:\AnyDesk" --start-with-win --silent
         
-        # 3. Harvest AnyDesk ID (Checking every 10s for 1 minute)
-        Write-Host "Searching for AnyDesk ID..."
-        $anyid = ""
-        for ($i=0; $i -lt 6; $i++) {
-            Start-Sleep -Seconds 10
-            $anyid = & "C:\AD\AnyDesk.exe" --get-id
-            if ($anyid) { break }
-        }
+        # 3. Set your connection password
+        # Password is set to: Gaming123
+        echo "Gaming123" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
+        # 4. Wait exactly 60 seconds (No loop)
+        # This gives the VM time to get a unique ID from AnyDesk servers.
+        Write-Host "Waking up AnyDesk... Please wait 60 seconds."
+        Start-Sleep -Seconds 60
+        
+        # 5. Extract the ID directly using the service path
+        $anyid = & "C:\AnyDesk\AnyDesk.exe" --get-id
         Write-Host "*******************************************"
-        Write-Host "YOUR ANYDESK ID: $anyid"
+        Write-Host "YOUR ANYDESK ID IS: $anyid"
         Write-Host "*******************************************"
-
-    - name: Prepare Parsec & Drivers
-      shell: pwsh
-      run: |
-        # Download Parsec and the Virtual Display Driver (VDD)
-        curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
-        curl.exe -L -o VDD.zip https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/v24.12.24/Signed-Driver-v24.12.24-x64.zip
-        Expand-Archive VDD.zip -DestinationPath C:\VDD
-        Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is LIVE. Connect via AnyDesk using ID above."
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
