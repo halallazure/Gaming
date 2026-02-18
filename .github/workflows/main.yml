@@ -1,29 +1,28 @@
-name: AnyDesk-Final-Fix
+name: AnyDesk-Final-NoLoop
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Setup AnyDesk (No Loops)
+    - name: Setup AnyDesk
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
         # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         
-        # 2. Force Silent Install to ProgramData (More stable in 2026)
-        # We use --install "Path" and --silent separately to ensure it works
-        .\anydesk.exe --install "C:\ProgramData\AnyDesk" --silent --start-with-win
+        # 2. Install Silently
+        .\anydesk.exe --install "C:\AnyDeskApp" --silent --start-with-win
         
-        # 3. Set the password (Gaming123)
-        # We use the full path to the newly installed exe
-        echo "Gaming123" | & "C:\ProgramData\AnyDesk\AnyDesk.exe" --set-password
-        
-        # 4. Wait exactly 60 seconds for ID generation
-        Write-Host "Waking up AnyDesk... (Waiting 60s)"
+        # 3. Wait exactly 60s for the system to settle
+        Write-Host "Installing AnyDesk... waiting 60s."
         Start-Sleep -Seconds 60
         
-        # 5. Extract ID from the config file (Deep Extraction - No command needed)
+        # 4. Set Password (using the specific install path)
+        echo "Gaming123" | & "C:\AnyDeskApp\AnyDesk.exe" --set-password
+        
+        # 5. Extract the ID directly from the config file
+        # This is safer than running a command that might not be 'recognized'
         $confPath = "C:\ProgramData\AnyDesk\system.conf"
         $anyid = Select-String -Path $confPath -Pattern "ad.anynet.id=(\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
         
