@@ -2,7 +2,8 @@ name: AnyDesk-Final-NoLoop
 on: workflow_dispatch
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-latest-gpu
+    
     steps:
     - name: Setup AnyDesk
       shell: pwsh
