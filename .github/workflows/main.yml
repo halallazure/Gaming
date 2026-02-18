@@ -1,14 +1,34 @@
-    - name: Finalize Windows Settings
+name: AnyDesk-Gaming-VM
+on: workflow_dispatch
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - name: Setup AnyDesk & Parsec
+      shell: pwsh
       run: |
-        # Disable NLA (Fixes "Unable to Connect" on many apps)
-        (Get-WmiObject -class "Win32_TSGeneralSetting" -Namespace root\cimv2\terminalservices -Filter "TerminalName='RDP-Tcp'").SetUserAuthenticationRequired(0)
+        $ProgressPreference = 'SilentlyContinue'
+        # 1. Download AnyDesk
+        curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         
-        # Set Password
-        net user runneradmin GamingVM123!
+        # 2. Install AnyDesk & Set Password
+        # Password is set to: Gaming123
+        echo "Gaming123" | .\anydesk.exe --set-password
         
-        # Force Enable RDP and Firewall
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        # 3. Get AnyDesk ID (This will show in your GitHub Logs)
+        Write-Host "-------------------------------------------"
+        $anyid = .\anydesk.exe --get-id
+        Write-Host "YOUR ANYDESK ID IS: $anyid"
+        Write-Host "-------------------------------------------"
         
-        # Open Port 3389 specifically
-        netsh advfirewall firewall add rule name="Open RDP" dir=in action=allow protocol=TCP localport=3389
+        # 4. Install Parsec (Already downloaded for later)
+        curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
+        Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
+
+    - name: Keep Alive (6 Hours)
+      run: |
+        $i = 0
+        while($i -lt 360) {
+          Start-Sleep -Seconds 60
+          $i++
+        }
