@@ -1,38 +1,40 @@
-name: AnyDesk-Direct-VM
+name: AnyDesk-Deep-Fix
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Setup AnyDesk (Direct Execution)
+    - name: Setup AnyDesk (No Loops)
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
         # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         
-        # 2. Install as a service to a standard path
+        # 2. Install as a system service (Mandatory for ID generation)
         .\anydesk.exe --install "C:\AnyDesk" --start-with-win --silent
         
-        # 3. Set your connection password
-        # Password is set to: Gaming123
+        # 3. Set the password (Gaming123)
         echo "Gaming123" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # 4. Wait exactly 60 seconds (No loop)
-        # This gives the VM time to get a unique ID from AnyDesk servers.
-        Write-Host "Waking up AnyDesk... Please wait 60 seconds."
+        # 4. Wait 60 seconds for the service to connect to AnyDesk servers
+        Write-Host "Waking up AnyDesk... (Waiting 60s)"
         Start-Sleep -Seconds 60
         
-        # 5. Extract the ID directly using the service path
-        $anyid = & "C:\AnyDesk\AnyDesk.exe" --get-id
+        # 5. Extract ID directly from the system configuration file
+        $confPath = "$env:ProgramData\AnyDesk\system.conf"
+        $anyid = Select-String -Path $confPath -Pattern "ad.anynet.id=(\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        
         Write-Host "*******************************************"
         Write-Host "YOUR ANYDESK ID IS: $anyid"
         Write-Host "*******************************************"
 
+    - name: Prepare Parsec
+      run: |
+        curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
+        Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
+
     - name: Keep Alive (6 Hours)
       run: |
         $i = 0
-        while($i -lt 360) {
-          Start-Sleep -Seconds 60
-          $i++
-        }
+        while($i -lt 360) { Start-Sleep -Seconds 60; $i++ }
