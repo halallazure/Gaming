@@ -1,4 +1,4 @@
-name: Standard-RDP
+name: Connect-RDP
 on: workflow_dispatch
 jobs:
   build:
@@ -10,5 +10,17 @@ jobs:
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    - name: Start AnyDesk
+      run: |
+        curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+        start ./anydesk.exe --set-password MySafePassword123!
+    - name: SHOW MY ID
+      run: |
+        Start-Sleep -Seconds 10
+        $ID = ./anydesk.exe --get-id
+        echo "------------------------------------------------"
+        echo "YOUR ANYDESK ID IS: $ID"
+        echo "YOUR PASSWORD IS: MySafePassword123!"
+        echo "------------------------------------------------"
     - name: Keep Alive
-      run: Start-Sleep -Seconds 21600
+      run: while($true){ echo "Running..."; Start-Sleep -Seconds 60 }
