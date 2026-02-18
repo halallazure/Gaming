@@ -1,38 +1,14 @@
-name: Ultimate-Fix-VM
-on: 
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-    - name: Connect to Tailscale
-      shell: pwsh
+    - name: Finalize Windows Settings
       run: |
-        $ProgressPreference = 'SilentlyContinue'
-        curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
-        Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
-        & 'C:\Program Files\Tailscale\tailscale.exe' up --authkey=${{ secrets.TAILSCALE_AUTHKEY }} --accept-routes
+        # Disable NLA (Fixes "Unable to Connect" on many apps)
+        (Get-WmiObject -class "Win32_TSGeneralSetting" -Namespace root\cimv2\terminalservices -Filter "TerminalName='RDP-Tcp'").SetUserAuthenticationRequired(0)
         
-    - name: Install Apps (Ignore Errors)
-      continue-on-error: true  # <--- THIS PREVENTS THE "EXIT CODE 1" CRASH
-      shell: pwsh
-      run: |
-        # 1. Install Parsec
-        curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
-        Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
-        
-        # 2. Setup Password
+        # Set Password
         net user runneradmin GamingVM123!
+        
+        # Force Enable RDP and Firewall
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-    - name: Keep Alive (6 Hours)
-      run: |
-        Write-Host "The VM is now ONLINE even if errors happened above."
-        Write-Host "Connect via RDP to manually run the Driver Installer!"
-        $i = 0
-        while($i -lt 360) {
-          Start-Sleep -Seconds 60
-          $i++
-        }
+        
+        # Open Port 3389 specifically
+        netsh advfirewall firewall add rule name="Open RDP" dir=in action=allow protocol=TCP localport=3389
