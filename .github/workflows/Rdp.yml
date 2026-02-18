@@ -1,53 +1,47 @@
-name: AnyDesk-Back-To-Working
+name: AnyDesk-Force-MSI
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Nuke & Start AnyDesk
+    - name: 1. Nuke and Force-Install MSI
       run: |
-        # Deleting these folders forces a fresh ID generation
-        Stop-Process -Name AnyDesk -ErrorAction SilentlyContinue
-        if (Test-Path "C:\ProgramData\AnyDesk") { Remove-Item -Path "C:\ProgramData\AnyDesk" -Recurse -Force }
-        if (Test-Path "$env:AppData\AnyDesk") { Remove-Item -Path "$env:AppData\AnyDesk" -Recurse -Force }
+        # Stop any old processes
+        taskkill /F /IM AnyDesk.exe /T 2>$null
         
-        # Download AnyDesk
-        curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+        # Download the MSI version (Better for 2026 Virtual Machines)
+        curl.exe -L -o anydesk.msi https://download.anydesk.com/AnyDesk.msi
         
-        # Set Password and Start Service
-        echo "MySafePassword123!" | ./anydesk.exe --set-password
-        ./anydesk.exe --service &
+        # Force install silently
+        msiexec.exe /i anydesk.msi /qn /norestart
+        Start-Sleep -Seconds 15
       shell: pwsh
 
-    - name: 2. WAIT AND FIND ID (Will not stop until found)
+    - name: 2. Configure Service & Password
       run: |
-        Write-Host "Searching for AnyDesk ID... Please wait..." -ForegroundColor Yellow
-        $count = 0
-        while ($count -lt 20) {
-            # Try Method A: Command Line
-            $ID = ./anydesk.exe --get-id
-            
-            # Try Method B: System Config File
-            $conf = "C:\ProgramData\AnyDesk\system.conf"
-            if (Test-Path $conf) {
-               $fileID = Select-String -Path $conf -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-            }
-            
-            if ($ID -or $fileID) {
+        $AD_PATH = "C:\Program Files (x86)\AnyDeskMSI\AnyDeskMSI.exe"
+        & $AD_PATH --set-password MySafePassword123!
+        Start-Sleep -Seconds 20
+      shell: pwsh
+
+    - name: 3. THE REVEAL (Fast Loop)
+      run: |
+        $AD_PATH = "C:\Program Files (x86)\AnyDeskMSI\AnyDeskMSI.exe"
+        Write-Host "Forcing ID Generation..." -ForegroundColor Yellow
+        
+        for ($i=1; $i -le 10; $i++) {
+            $ID = & $AD_PATH --get-id
+            if ($ID) {
                 Write-Host "------------------------------------------------" -ForegroundColor Green
-                Write-Host "SUCCESS! ID FOUND." -ForegroundColor Green
-                if ($ID) { Write-Host "ANYDESK ID: $ID" -ForegroundColor Cyan }
-                if ($fileID) { Write-Host "ANYDESK ID (Backup): $fileID" -ForegroundColor Cyan }
+                Write-Host "SUCCESS! YOUR ANYDESK ID: $ID" -ForegroundColor Cyan
                 Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
                 Write-Host "------------------------------------------------" -ForegroundColor Green
                 break
             }
-            
-            Write-Host "ID not ready yet, retrying in 10 seconds... ($count/20)"
+            Write-Host "Handshake in progress... Attempt $i/10"
             Start-Sleep -Seconds 10
-            $count++
         }
       shell: pwsh
 
-    - name: 3. Keep Alive
+    - name: 4. Keep Alive
       run: while($true){ Start-Sleep -Seconds 60 }
