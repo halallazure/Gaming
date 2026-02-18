@@ -1,39 +1,37 @@
-name: Cloudflare-Direct-RDP
+name: Tailscale-Gaming-RDP
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Enable Remote Desktop
+    - name: 1. Setup Windows RDP
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
         net user runneradmin MySafePassword123!
       shell: pwsh
 
-    - name: 2. Setup Cloudflare Tunnel
+    - name: 2. Install Tailscale
       run: |
-        curl.exe -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+        curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
+        Start-Process ./tailscale-setup.exe -ArgumentList "/quiet" -Wait
       shell: pwsh
 
-    - name: 3. Start Tunnel and Reveal URL
+    - name: 3. Join Network
       run: |
-        # Start tunnel in background to bridge RDP port 3389
-        Start-Process ./cloudflared.exe -ArgumentList "tunnel --url tcp://localhost:3389"
-        Start-Sleep -Seconds 20
-        
-        # Pull the link from the logs
+        # Generate an Auth Key at https://login.tailscale.com/admin/settings/keys
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey YOUR_AUTH_KEY_HERE --hostname github-gaming-pc
+      shell: pwsh
+
+    - name: 4. Final Details
+      run: |
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "YOUR CONNECTION DETAILS ARE BELOW" -ForegroundColor Yellow
+        Write-Host "STATUS: CONNECTED TO TAILSCALE" -ForegroundColor Yellow
+        Write-Host "Check the Tailscale app on your Redmi Pad for 'github-gaming-pc'"
         Write-Host "USER: runneradmin" -ForegroundColor White
         Write-Host "PASS: MySafePassword123!" -ForegroundColor White
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "Looking for Cloudflare link..." -ForegroundColor Cyan
-        
-        # This will print the tunnel logs so you can copy the 'trycloudflare.com' link
-        Get-Content -Path "$env:TEMP\cloudflared.log" -ErrorAction SilentlyContinue
       shell: pwsh
 
-    - name: 4. Keep Alive
+    - name: 5. Keep Alive
       run: while($true){ Start-Sleep -Seconds 60 }
