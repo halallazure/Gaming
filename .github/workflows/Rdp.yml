@@ -1,43 +1,53 @@
-name: Tailscale-RDP-Fixed-0x204
+name: AnyDesk-Back-To-Working
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Setup Windows & Kill NLA (Fixes 0x204)
+    - name: 1. Nuke & Start AnyDesk
       run: |
-        # Enable RDP and set password
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-        net user runneradmin MySafePassword123!
+        # Deleting these folders forces a fresh ID generation
+        Stop-Process -Name AnyDesk -ErrorAction SilentlyContinue
+        if (Test-Path "C:\ProgramData\AnyDesk") { Remove-Item -Path "C:\ProgramData\AnyDesk" -Recurse -Force }
+        if (Test-Path "$env:AppData\AnyDesk") { Remove-Item -Path "$env:AppData\AnyDesk" -Recurse -Force }
         
-        # Disable NLA (Network Level Authentication) - CRITICAL for tablets
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 0
+        # Download AnyDesk
+        curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         
-        # Force Firewall to open Port 3389
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        New-NetFirewallRule -DisplayName "RDP-In" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow
+        # Set Password and Start Service
+        echo "MySafePassword123!" | ./anydesk.exe --set-password
+        ./anydesk.exe --service &
       shell: pwsh
 
-    - name: 2. Install Tailscale
+    - name: 2. WAIT AND FIND ID (Will not stop until found)
       run: |
-        curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
-        Start-Process ./tailscale-setup.exe -ArgumentList "/quiet" -Wait
+        Write-Host "Searching for AnyDesk ID... Please wait..." -ForegroundColor Yellow
+        $count = 0
+        while ($count -lt 20) {
+            # Try Method A: Command Line
+            $ID = ./anydesk.exe --get-id
+            
+            # Try Method B: System Config File
+            $conf = "C:\ProgramData\AnyDesk\system.conf"
+            if (Test-Path $conf) {
+               $fileID = Select-String -Path $conf -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+            }
+            
+            if ($ID -or $fileID) {
+                Write-Host "------------------------------------------------" -ForegroundColor Green
+                Write-Host "SUCCESS! ID FOUND." -ForegroundColor Green
+                if ($ID) { Write-Host "ANYDESK ID: $ID" -ForegroundColor Cyan }
+                if ($fileID) { Write-Host "ANYDESK ID (Backup): $fileID" -ForegroundColor Cyan }
+                Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
+                Write-Host "------------------------------------------------" -ForegroundColor Green
+                break
+            }
+            
+            Write-Host "ID not ready yet, retrying in 10 seconds... ($count/20)"
+            Start-Sleep -Seconds 10
+            $count++
+        }
       shell: pwsh
 
-    - name: 3. Join Mesh Network
-      run: |
-        # Use your specific Auth Key
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-kvnoPVtV7221CNTRL-haATdQL198HDR37UGgL19H1cRfcVNG5k --hostname github-gaming-pc --accept-routes --unattended
-      shell: pwsh
-
-    - name: 4. Final Verification
-      run: |
-        Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "0x204 FIX APPLIED. PC IS ONLINE." -ForegroundColor Yellow
-        Write-Host "USER: runneradmin" -ForegroundColor White
-        Write-Host "PASS: MySafePassword123!" -ForegroundColor White
-        Write-Host "------------------------------------------------" -ForegroundColor Green
-      shell: pwsh
-
-    - name: 5. Keep Alive
+    - name: 3. Keep Alive
       run: while($true){ Start-Sleep -Seconds 60 }
