@@ -1,26 +1,13 @@
-name: Connect-RDP
-on: workflow_dispatch
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-    - name: Set Password
-      run: net user runneradmin MySafePassword123!
-    - name: Enable RDP
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - name: Start AnyDesk
+    - name: Start AnyDesk and Set Password
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        start ./anydesk.exe --set-password MySafePassword123!
+        # This is the secret 2026 fix: Pipe the password into AnyDesk
+        echo "MySafePassword123!" | ./anydesk.exe --set-password
     - name: SHOW MY ID
       run: |
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds 15
         $ID = ./anydesk.exe --get-id
-        echo "------------------------------------------------"
-        echo "YOUR ANYDESK ID IS: $ID"
-        echo "YOUR PASSWORD IS: MySafePassword123!"
-        echo "------------------------------------------------"
-    - name: Keep Alive
-      run: while($true){ echo "Running..."; Start-Sleep -Seconds 60 }
+        Write-Host "------------------------------------------------" -ForegroundColor Green
+        Write-Host "YOUR ANYDESK ID IS: $ID" -ForegroundColor Cyan
+        Write-Host "YOUR PASSWORD IS: MySafePassword123!" -ForegroundColor Yellow
+        Write-Host "------------------------------------------------" -ForegroundColor Green
