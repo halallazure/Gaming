@@ -1,40 +1,47 @@
-name: AnyDesk-Deep-Fix
+name: Deep-Force-Gaming-VM
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Force Install AnyDesk & Extract ID
+    - name: Setup System & AnyDesk
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        # 1. Download and Install
+        # 1. Install AnyDesk to a custom path
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        .\anydesk.exe --install "C:\anydesk" --start-with-win --silent
+        .\anydesk.exe --install "C:\AD" --start-with-win --silent
+        echo "Gaming123" | & "C:\AD\AnyDesk.exe" --set-password
         
-        # 2. Set the password
-        echo "Gaming123" | & "C:\anydesk\AnyDesk.exe" --set-password
+        # 2. Setup Windows User (Backup Access)
+        net user runneradmin GamingVM123! /add
+        net localgroup administrators runneradmin /add
         
-        # 3. Wait and Force-Refresh the service
-        Write-Host "Waiting for AnyDesk to generate ID..."
-        Start-Sleep -Seconds 60
-        
-        # 4. Method A: Command line get-id
-        $id1 = & "C:\anydesk\AnyDesk.exe" --get-id
-        
-        # 5. Method B: Read from system.conf file (Deep Extraction)
-        $confPath = "$env:ProgramData\AnyDesk\system.conf"
-        if (Test-Path $confPath) {
-            $id2 = Select-String -Path $confPath -Pattern "ad.anynet.id=(\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        # 3. Harvest AnyDesk ID (Checking every 10s for 1 minute)
+        Write-Host "Searching for AnyDesk ID..."
+        $anyid = ""
+        for ($i=0; $i -lt 6; $i++) {
+            Start-Sleep -Seconds 10
+            $anyid = & "C:\AD\AnyDesk.exe" --get-id
+            if ($anyid) { break }
         }
+        
+        Write-Host "*******************************************"
+        Write-Host "YOUR ANYDESK ID: $anyid"
+        Write-Host "*******************************************"
 
-        Write-Host "*******************************************"
-        Write-Host "METHOD A ID: $id1"
-        Write-Host "METHOD B ID: $id2"
-        Write-Host "*******************************************"
+    - name: Prepare Parsec & Drivers
+      shell: pwsh
+      run: |
+        # Download Parsec and the Virtual Display Driver (VDD)
+        curl.exe -L -o parsec.exe https://builds.parsec.app/package/parsec-windows.exe
+        curl.exe -L -o VDD.zip https://github.com/VirtualDrivers/Virtual-Display-Driver/releases/download/v24.12.24/Signed-Driver-v24.12.24-x64.zip
+        Expand-Archive VDD.zip -DestinationPath C:\VDD
+        Start-Process .\parsec.exe -ArgumentList "/silent" -Wait
 
     - name: Keep Alive (6 Hours)
       run: |
+        Write-Host "VM is LIVE. Connect via AnyDesk using ID above."
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
