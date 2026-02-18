@@ -1,33 +1,40 @@
-name: Ultimate-AnyDesk-VM
+name: AnyDesk-Deep-Fix
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Setup AnyDesk (Force ID Extraction)
+    - name: Force Install AnyDesk & Extract ID
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        # 1. Download and Install AnyDesk as a Service
+        # 1. Download and Install
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        .\anydesk.exe --install "C:\Program Files (x86)\AnyDesk" --start-with-win --silent
+        .\anydesk.exe --install "C:\anydesk" --start-with-win --silent
         
-        # 2. Set the password to: Gaming123
-        echo "Gaming123" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
+        # 2. Set the password
+        echo "Gaming123" | & "C:\anydesk\AnyDesk.exe" --set-password
         
-        # 3. Wait for the service to wake up and generate an ID
-        Write-Host "Waking up AnyDesk... (Wait 45s)"
-        Start-Sleep -Seconds 45
+        # 3. Wait and Force-Refresh the service
+        Write-Host "Waiting for AnyDesk to generate ID..."
+        Start-Sleep -Seconds 60
         
-        # 4. Extract ID from the system configuration file
-        $anyid = & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --get-id
+        # 4. Method A: Command line get-id
+        $id1 = & "C:\anydesk\AnyDesk.exe" --get-id
+        
+        # 5. Method B: Read from system.conf file (Deep Extraction)
+        $confPath = "$env:ProgramData\AnyDesk\system.conf"
+        if (Test-Path $confPath) {
+            $id2 = Select-String -Path $confPath -Pattern "ad.anynet.id=(\d+)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        }
+
         Write-Host "*******************************************"
-        Write-Host "YOUR ANYDESK ID IS: $anyid"
+        Write-Host "METHOD A ID: $id1"
+        Write-Host "METHOD B ID: $id2"
         Write-Host "*******************************************"
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is running! Connect using the ID above."
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
