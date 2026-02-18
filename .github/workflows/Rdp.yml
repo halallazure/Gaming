@@ -1,34 +1,39 @@
-name: Connect-RDP-BackToBasics
+name: Tailscale-Gaming-RDP
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Download & Start AnyDesk
+    - name: 1. Setup Windows RDP
       run: |
-        # Use the direct download link you used before
-        curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        # Set password
-        echo "MySafePassword123!" | ./anydesk.exe --set-password
-        # Start the service
-        ./anydesk.exe --service &
-        Start-Sleep -Seconds 45
+        # Enable RDP and set your runner password
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        net user runneradmin MySafePassword123!
       shell: pwsh
 
-    - name: 2. Reveal ID (Old Method + Force)
+    - name: 2. Install Tailscale (Silent)
       run: |
-        # This is the line that worked for you before
-        $ID = ./anydesk.exe --get-id
-        
-        # This is the 'Force' to make sure it shows in the log
-        Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "ANYDESK ID: $ID" -ForegroundColor Cyan
-        Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
-        Write-Host "------------------------------------------------" -ForegroundColor Green
-        
-        # If the above is blank, this searches the system file directly
-        Get-Content "C:\ProgramData\AnyDesk\system.conf" | Select-String "ad.anynet.id="
+        curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
+        Start-Process ./tailscale-setup.exe -ArgumentList "/quiet" -Wait
       shell: pwsh
 
-    - name: 3. Keep Alive
+    - name: 3. Join Mesh Network
+      run: |
+        # Using your provided Auth Key to connect to your Tailnet
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-kvnoPVtV7221CNTRL-haATdQL198HDR37UGgL19H1cRfcVNG5k --hostname github-gaming-pc --accept-routes --unattended
+      shell: pwsh
+
+    - name: 4. Verification & Details
+      run: |
+        Write-Host "------------------------------------------------" -ForegroundColor Green
+        Write-Host "STATUS: PC CONNECTED SUCCESSFULLY" -ForegroundColor Yellow
+        Write-Host "HOSTNAME: github-gaming-pc" -ForegroundColor Cyan
+        Write-Host "USER: runneradmin" -ForegroundColor White
+        Write-Host "PASS: MySafePassword123!" -ForegroundColor White
+        Write-Host "------------------------------------------------" -ForegroundColor Green
+        Write-Host "Open Tailscale on your Redmi Pad now." -ForegroundColor Yellow
+      shell: pwsh
+
+    - name: 5. Keep Alive
       run: while($true){ Start-Sleep -Seconds 60 }
