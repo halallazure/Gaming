@@ -4,33 +4,30 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: Connect to Tailscale
-      uses: tailscale/github-action@v2  # Uses the official automated method
-      with:
-        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
-        
-    - name: Setup AnyDesk & Parsec
+    - name: Setup AnyDesk
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
-        # Download and Start AnyDesk
+        # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        Start-Process .\anydesk.exe
-        Start-Sleep -Seconds 10
         
-        # Set Password: Gaming123
+        # 2. Start AnyDesk and set a password
+        # Password is set to: Gaming123
         echo "Gaming123" | .\anydesk.exe --set-password
+        Start-Process .\anydesk.exe
         
-        # Display ID in logs (Wait for it to generate)
-        Start-Sleep -Seconds 20
-        Write-Host "-------------------------------------------"
+        # 3. Wait for AnyDesk service to generate the ID
+        Write-Host "Waiting 30 seconds for AnyDesk ID..."
+        Start-Sleep -Seconds 30
+        
+        # 4. Force-print the ID to the logs
         $anyid = & .\anydesk.exe --get-id
+        Write-Host "*******************************************"
         Write-Host "YOUR ANYDESK ID IS: $anyid"
-        Write-Host "-------------------------------------------"
+        Write-Host "*******************************************"
 
     - name: Keep Alive (6 Hours)
       run: |
-        Write-Host "VM is now ONLINE. Check Tailscale Dashboard!"
         $i = 0
         while($i -lt 360) {
           Start-Sleep -Seconds 60
