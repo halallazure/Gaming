@@ -1,23 +1,24 @@
-    - name: Force Get AnyDesk ID
+    - name: Start AnyDesk Service
       run: |
-        # 1. Start the process and wait for it to generate the ID file
+        # Start AnyDesk as a background service to ensure ID generation
         ./anydesk.exe --service &
-        Start-Sleep -Seconds 20
+        Start-Sleep -Seconds 30
+      shell: pwsh
+
+    - name: Get AnyDesk ID (Two Methods)
+      run: |
+        # Method 1: Standard Command
+        $ID_CMD = ./anydesk.exe --get-id
         
-        # 2. Try method A: Standard CLI command
-        $cmdID = ./anydesk.exe --get-id
-        
-        # 3. Try method B: Read from the internal system config file
-        $configPath = "$env:AppData\AnyDesk\system.conf"
-        if (Test-Path $configPath) {
-            $fileID = Select-String -Path $configPath -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Value -replace "ad.anynet.id=","" }
+        # Method 2: Read from system.conf file (Deep Search)
+        $confPath = "$env:AppData\AnyDesk\system.conf"
+        if (Test-Path $confPath) {
+          $ID_FILE = Select-String -Path $confPath -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         }
 
-        # 4. Display the results clearly
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        if ($cmdID) { Write-Host "METHOD A (CLI) ID: $cmdID" -ForegroundColor Cyan }
-        if ($fileID) { Write-Host "METHOD B (FILE) ID: $fileID" -ForegroundColor Cyan }
-        if (!$cmdID -and !$fileID) { Write-Host "ERROR: ID not generated yet. Try re-running." -ForegroundColor Red }
+        Write-Host "ANYDESK ID (CMD): $ID_CMD" -ForegroundColor Cyan
+        Write-Host "ANYDESK ID (FILE): $ID_FILE" -ForegroundColor Cyan
         Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
