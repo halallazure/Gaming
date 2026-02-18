@@ -1,35 +1,22 @@
-name: AnyDesk-Gaming-VM
-on: workflow_dispatch
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-    - name: Setup AnyDesk
+    - name: Setup AnyDesk (Force ID)
       shell: pwsh
       run: |
         $ProgressPreference = 'SilentlyContinue'
         # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         
-        # 2. Start AnyDesk and set a password
-        # Password is set to: Gaming123
-        echo "Gaming123" | .\anydesk.exe --set-password
-        Start-Process .\anydesk.exe
+        # 2. Install as a service (Critical for ID generation)
+        .\anydesk.exe --install "C:\Program Files (x86)\AnyDesk" --start-with-win --silent
         
-        # 3. Wait for AnyDesk service to generate the ID
-        Write-Host "Waiting 30 seconds for AnyDesk ID..."
-        Start-Sleep -Seconds 30
+        # 3. Set the password
+        echo "Gaming123" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
         
-        # 4. Force-print the ID to the logs
-        $anyid = & .\anydesk.exe --get-id
-        Write-Host "*******************************************"
+        # 4. Wait for the service to communicate with AnyDesk servers
+        Write-Host "Waking up AnyDesk service..."
+        Start-Sleep -Seconds 45
+        
+        # 5. Extract ID directly from the installed service path
+        $anyid = & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --get-id
+        Write-Host "-------------------------------------------"
         Write-Host "YOUR ANYDESK ID IS: $anyid"
-        Write-Host "*******************************************"
-
-    - name: Keep Alive (6 Hours)
-      run: |
-        $i = 0
-        while($i -lt 360) {
-          Start-Sleep -Seconds 60
-          $i++
-        }
+        Write-Host "-------------------------------------------"
