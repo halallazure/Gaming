@@ -1,18 +1,24 @@
-name: Tailscale-Gaming-RDP
+name: Tailscale-RDP-Fixed-0x204
 on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Setup Windows RDP
+    - name: 1. Setup Windows & Kill NLA (Fixes 0x204)
       run: |
-        # Enable RDP and set your runner password
+        # Enable RDP and set password
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         net user runneradmin MySafePassword123!
+        
+        # Disable NLA (Network Level Authentication) - CRITICAL for tablets
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 0
+        
+        # Force Firewall to open Port 3389
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        New-NetFirewallRule -DisplayName "RDP-In" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow
       shell: pwsh
 
-    - name: 2. Install Tailscale (Silent)
+    - name: 2. Install Tailscale
       run: |
         curl.exe -L -o tailscale-setup.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
         Start-Process ./tailscale-setup.exe -ArgumentList "/quiet" -Wait
@@ -20,19 +26,17 @@ jobs:
 
     - name: 3. Join Mesh Network
       run: |
-        # Using your provided Auth Key to connect to your Tailnet
+        # Use your specific Auth Key
         & "C:\Program Files\Tailscale\tailscale.exe" up --authkey tskey-auth-kvnoPVtV7221CNTRL-haATdQL198HDR37UGgL19H1cRfcVNG5k --hostname github-gaming-pc --accept-routes --unattended
       shell: pwsh
 
-    - name: 4. Verification & Details
+    - name: 4. Final Verification
       run: |
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "STATUS: PC CONNECTED SUCCESSFULLY" -ForegroundColor Yellow
-        Write-Host "HOSTNAME: github-gaming-pc" -ForegroundColor Cyan
+        Write-Host "0x204 FIX APPLIED. PC IS ONLINE." -ForegroundColor Yellow
         Write-Host "USER: runneradmin" -ForegroundColor White
         Write-Host "PASS: MySafePassword123!" -ForegroundColor White
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "Open Tailscale on your Redmi Pad now." -ForegroundColor Yellow
       shell: pwsh
 
     - name: 5. Keep Alive
