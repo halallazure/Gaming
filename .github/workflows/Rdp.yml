@@ -2,35 +2,39 @@ name: Connect-RDP
 on: workflow_dispatch
 jobs:
   build:
-    runs-on: windows-2022 # Using 2022 for better compatibility
+    runs-on: windows-latest
     steps:
-    - name: Download AnyDesk
-      run: curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-
-    - name: Start AnyDesk and Set Password
+    - name: 1. Download & Prepare
       run: |
-        ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        echo "MySafePassword123!" | C:\AnyDesk\AnyDesk.exe --set-password
+        curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+        # Move it to a safe place we can always find
+        mkdir C:\AD
+        move anydesk.exe C:\AD\anydesk.exe
+
+    - name: 2. Set Password (Piped)
+      run: |
+        echo "MySafePassword123!" | C:\AD\anydesk.exe --set-password
       shell: pwsh
 
-    - name: REVEAL ANYDESK ID
+    - name: 3. Start Service & Reveal ID
       run: |
+        # Start in background to generate the ID
+        Start-Process -FilePath "C:\AD\anydesk.exe" -ArgumentList "--service"
         Start-Sleep -Seconds 20
-        # Method: Read directly from the Registry
-        $RegistryPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
-        $ID = (Get-ItemProperty -Path $RegistryPath).ad_anynet_id
+        
+        # Get ID from the file (the most reliable way in 2026)
+        $confPath = "$env:AppData\AnyDesk\system.conf"
+        if (Test-Path $confPath) {
+            $ID = Select-String -Path $confPath -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        } else {
+            $ID = "Waiting... Try re-running the Get ID step."
+        }
         
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        if ($ID) {
-            Write-Host "YOUR ANYDESK ID IS: $ID" -ForegroundColor Cyan
-        } else {
-            # Backup: Check the system.conf file
-            $ID_FILE = Select-String -Path "$env:ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-            Write-Host "YOUR ANYDESK ID IS: $ID_FILE" -ForegroundColor Cyan
-        }
-        Write-Host "YOUR PASSWORD IS: MySafePassword123!" -ForegroundColor Yellow
+        Write-Host "YOUR ANYDESK ID: $ID" -ForegroundColor Cyan
+        Write-Host "YOUR PASSWORD: MySafePassword123!" -ForegroundColor Yellow
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: Keep Alive
+    - name: 4. Keep Alive
       run: while($true){ Start-Sleep -Seconds 60 }
