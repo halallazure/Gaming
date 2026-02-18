@@ -1,31 +1,16 @@
-name: Connect-RDP
-on: workflow_dispatch
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-    - name: 1. Download AnyDesk
-      run: curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-
-    - name: 2. Set Password & Start Service
+    - name: Start AnyDesk & Extract ID
       run: |
-        # Set password via the 2026 pipe method
-        echo "MySafePassword123!" | ./anydesk.exe --set-password
-        # Force AnyDesk to start as a system service
+        # 1. Start AnyDesk to generate the configuration files
         ./anydesk.exe --service &
-        # Critical: Wait for the network to assign an ID
         Start-Sleep -Seconds 30
-      shell: pwsh
-
-    - name: 3. FIND MY ID (Multi-Method)
-      run: |
-        # Method A: Registry Check (Most reliable on GitHub)
+        
+        # 2. Method A: Extract from System Registry (Most stable)
         $ID_REG = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\AnyDesk").ad_anynet_id
         
-        # Method B: Search the AppData configuration file
-        $conf = "$env:AppData\AnyDesk\system.conf"
-        if (Test-Path $conf) {
-          $ID_FILE = Select-String -Path $conf -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        # 3. Method B: Read from System Config File
+        $confPath = "$env:ProgramData\AnyDesk\system.conf"
+        if (Test-Path $confPath) {
+            $ID_FILE = Select-String -Path $confPath -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         }
 
         Write-Host "------------------------------------------------" -ForegroundColor Green
@@ -34,6 +19,3 @@ jobs:
         Write-Host "PASSWORD: MySafePassword123!" -ForegroundColor Yellow
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
-
-    - name: 4. Keep Alive
-      run: while($true){ Start-Sleep -Seconds 60 }
