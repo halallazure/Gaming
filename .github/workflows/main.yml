@@ -1,0 +1,14 @@
+    - name: Finalize Windows Settings
+      run: |
+        # Disable NLA (Fixes "Unable to Connect" on many apps)
+        (Get-WmiObject -class "Win32_TSGeneralSetting" -Namespace root\cimv2\terminalservices -Filter "TerminalName='RDP-Tcp'").SetUserAuthenticationRequired(0)
+        
+        # Set Password
+        net user runneradmin GamingVM123!
+        
+        # Force Enable RDP and Firewall
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        
+        # Open Port 3389 specifically
+        netsh advfirewall firewall add rule name="Open RDP" dir=in action=allow protocol=TCP localport=3389
