@@ -1,4 +1,4 @@
-name: AnyDesk-Force-Fix-16GB
+name: AnyDesk-16GB-Final-Anyhow
 on: workflow_dispatch
 
 jobs:
@@ -8,43 +8,40 @@ jobs:
     - name: 1. Install AnyDesk to Fixed Path
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        # Install to C:\AnyDesk
+        # Installing to the path established in your previous logs
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 15
       shell: pwsh
 
-    - name: 2. Force Unattended Access (Registry Method)
+    - name: 2. Force Unattended Access (Fixed Argument Syntax)
       run: |
         $Password = "GitHub@2026"
-        # Force kill any stuck processes
+        # Force kill stuck processes to prevent 'Service Busy' errors
         taskkill /F /IM AnyDesk.exe /T 2>$null
         
-        # Inject the password directly into the AnyDesk configuration
-        # This prevents the "Service starting or stopping" error
+        # Inject the password using the working echo method
         echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Manually trigger the service start without using 'net start'
-        Write-Host "Forcing service start..." -ForegroundColor Cyan
-        Start-Process "C:\AnyDesk\AnyDesk.exe" --argumentlist "--service"
+        # CORRECTED START COMMAND: Using -ArgumentList properly to avoid positional errors
+        Write-Host "Forcing service start with correct parameters..." -ForegroundColor Cyan
+        Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
         
-        # Wait for the network to register the ID
+        # Wait for the ID to register on the network
         Start-Sleep -Seconds 30
       shell: pwsh
 
     - name: 3. THE REVEAL
       run: |
-        # Pull the ID from the system config file directly
+        # Directly pull ID from system config for 100% accuracy
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         $PublicIP = curl.exe -s https://api.ipify.org
         
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
+        if ($ID) { Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow }
+        else { Write-Host "ID NOT READY - REFRESH LOGS IN 10 SECONDS" -ForegroundColor Red }
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
         Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        
-        # If ID is still blank, force a CLI check
-        if (!$ID) { & "C:\AnyDesk\AnyDesk.exe" --get-id }
       shell: pwsh
 
     - name: 4. Keep Alive
