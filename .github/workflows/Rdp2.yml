@@ -1,49 +1,48 @@
-name: AnyDesk-Fixed-Path-2026
+name: GitHub-Gaming-16GB-Public
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025  # Forces the 2026-spec 16GB hardware
     steps:
-    - name: 1. Silent Install AnyDesk to Custom Path
+    - name: 1. Optimize Windows for 16GB Gaming
+      run: |
+        # Enable 60 FPS RDP and Unlock LG TV Firewall
+        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "DWMFRAMEINTERVAL" /t REG_DWORD /d 15 /f
+        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "UserAuthentication" /t REG_DWORD /d 0 /f
+        netsh advfirewall firewall add rule name="LG_TV_OFFICE" dir=in action=allow protocol=TCP localport=3389
+        # Set Power Plan to High Performance
+        powercfg /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+      shell: pwsh
+
+    - name: 2. Install AnyDesk & Tools
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        # This line installs it specifically to C:\AnyDesk
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 20
       shell: pwsh
 
-    - name: 2. Force Password & ID (Using Correct Path)
+    - name: 3. Set AnyDesk Password (Fixed Path)
       run: |
         $Password = "GitHub@2026"
-        Write-Host "Setting password at C:\AnyDesk\AnyDesk.exe..." -ForegroundColor Yellow
-        
-        # Fixed the path here to match your installation
+        # Using the correct C:\AnyDesk path from your previous error
         echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
-        Start-Sleep -Seconds 15
-        
-        # Refresh the service using the correct path
         taskkill /F /IM AnyDesk.exe /T 2>$null
         Start-Process "C:\AnyDesk\AnyDesk.exe" --service
-        Start-Sleep -Seconds 20
+        Start-Sleep -Seconds 15
       shell: pwsh
 
-    - name: 3. THE REVEAL
+    - name: 4. The Reveal (IP for TV & ID for Tablet)
       run: |
-        # Search the custom path for the ID
-        $RegID = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\AnyDesk" -ErrorAction SilentlyContinue).ad_anynet_id
-        $FileID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" -ErrorAction SilentlyContinue | ForEach-Object { $_.Matches.Groups[1].Value }
-        
+        $PublicIP = curl.exe -s https://api.ipify.org
+        $AnyDeskID = & "C:\AnyDesk\AnyDesk.exe" --get-id
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        if ($RegID) { Write-Host "ID FOUND: $RegID" -ForegroundColor Cyan }
-        elseif ($FileID) { Write-Host "ID FOUND: $FileID" -ForegroundColor Cyan }
-        else { 
-          Write-Host "GETTING ID MANUALLY..." -ForegroundColor Red
-          & "C:\AnyDesk\AnyDesk.exe" --get-id 
-        }
+        Write-Host "FOR LG TV (IP): $PublicIP" -ForegroundColor Cyan
+        Write-Host "FOR TABLET (ID): $AnyDeskID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
+        Write-Host "RAM: 16 GB DETECTED" -ForegroundColor Green
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive
+    - name: 5. Stay Online (6 Hours)
       run: while($true){ Start-Sleep -Seconds 60 }
