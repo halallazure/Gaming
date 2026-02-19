@@ -11,7 +11,7 @@ jobs:
       with:
         name: My-RDP-Backup
         path: C:\Restore
-        workflow: Rdp2.yml # Must match your filename
+        workflow: Rdp3.yml # Updated to match your current filename
 
     - name: 1. Install AnyDesk
       run: |
@@ -27,20 +27,46 @@ jobs:
         Start-Sleep -Seconds 40
       shell: pwsh
 
-    - name: 3. Apply Restore & Optimization
+    - name: 3. Apply Restore, Optimization & Deep Clean
       run: |
-        # Restore Registry Settings if they exist
+        # 1. Restore Registry Settings and Desktop Files
         if (Test-Path "C:\Restore\WindowsSettings.reg") {
             reg import "C:\Restore\WindowsSettings.reg"
         }
-        # Restore Desktop Files
         if (Test-Path "C:\Restore\*") {
             Copy-Item -Path "C:\Restore\*" -Destination "C:\Users\runneradmin\Desktop" -Recurse -Force
         }
+
+        # 2. DEEP CLEAN: Remove Unnecessary Apps
+        Write-Host "Freeing up ~40GB of space... please wait." -ForegroundColor Cyan
         
-        # Performance Tweaks
+        # Remove Visual Studio Enterprise (~31.78 GB)
+        if (Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe") {
+            Start-Process "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe" -ArgumentList "uninstall --installPath `"C:\Program Files\Microsoft Visual Studio\2022\Enterprise`" --passive --norestart" -Wait
+        }
+
+        # Remove other large non-essential developer tools
+        $appsToRemove = @(
+            "PostgreSQL*", 
+            "MySQL*", 
+            "Strawberry Perl*", 
+            "LLVM*", 
+            "Unity Hub*", 
+            "Microsoft Azure*",
+            "Kindle",
+            "Cmake",
+            "Go Programming Language",
+            "MongoDB*"
+        )
+        foreach ($app in $appsToRemove) {
+            Get-Package -Name $app -ErrorAction SilentlyContinue | Uninstall-Package -Force -ErrorAction SilentlyContinue
+        }
+
+        # 3. Performance & Storage Tweaks
         compact.exe /compactos:always
         powercfg -h off
+        
+        Write-Host "Cleanup Complete! Extra space added for Chrome." -ForegroundColor Green
       shell: pwsh
 
     - name: 4. THE REVEAL
@@ -65,7 +91,9 @@ jobs:
       if: always()
       run: |
         New-Item -Path "C:\Backup" -ItemType Directory -Force
+        # Saves your Wallpaper and UI settings
         reg export "HKCU\Software" "C:\Backup\WindowsSettings.reg" /y
+        # Saves everything on your Desktop
         Copy-Item -Path "C:\Users\runneradmin\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
       shell: pwsh
 
