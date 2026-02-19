@@ -5,48 +5,67 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. SMART RESTORE (Settings & Files)
+    - name: 0. Fast Restore
       uses: dawidd6/action-download-artifact@v3
       continue-on-error: true 
       with:
         name: My-RDP-Backup
         path: C:\Restore
-        workflow: Rdp3.yml # Fixed name to match your file
+        # FIXED: Changed to Rdp3.yml to match your file and stop the 5-minute error
+        workflow: Rdp3.yml 
 
-    - name: 1. Instant Setup
+    - name: 1. Install & Setup AnyDesk
       run: |
+        # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+        
+        # 2. Run Silent Install
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-        Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
-        Start-Sleep -Seconds 10
+        
+        # 3. FIX: Wait until the .exe actually exists before running it
+        Write-Host "Waiting for AnyDesk to install..." -ForegroundColor Cyan
+        $count = 0
+        while (!(Test-Path "C:\AnyDesk\AnyDesk.exe") -and $count -lt 30) {
+            Start-Sleep -Seconds 2
+            $count++
+        }
+
+        # 4. Set Password and Start Service
+        if (Test-Path "C:\AnyDesk\AnyDesk.exe") {
+            echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+            Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
+            Start-Sleep -Seconds 10
+        } else {
+            Write-Error "Installation failed: AnyDesk.exe not found."
+            exit 1
+        }
       shell: pwsh
 
-    - name: 2. MAJOR PERSISTENCE ENHANCEMENTS
+    - name: 2. Major Persistence & Performance
       run: |
-        # --- ENHANCEMENT 1: WALLPAPER & UI RESTORE ---
-        if (Test-Path "C:\Restore\WindowsSettings.reg") {
-            Write-Host "Restoring your wallpaper and settings..." -ForegroundColor Cyan
+        # Restore Registry (Wallpaper/Settings)
+        if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
-            # Refresh the desktop to show the wallpaper immediately
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-
-        # --- ENHANCEMENT 2: DESKTOP FILE RESTORE ---
-        if (Test-Path "C:\Restore\*") {
-            Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force
+        
+        # Restore Desktop Files
+        if (Test-Path "C:\Restore\*") { 
+            Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
 
-        # --- ENHANCEMENT 3: PERFORMANCE ---
+        # Performance: Instant 4GB space gain
         powercfg -h off
-        Write-Host "Success: All changes from your last session are back!" -ForegroundColor Green
+        Write-Host "System Enhanced Successfully!" -ForegroundColor Green
       shell: pwsh
 
     - name: 3. THE REVEAL
       run: |
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        Write-Host "------------------------------------------------" -ForegroundColor Green
         Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
+        Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
     - name: 4. Keep Alive
@@ -56,22 +75,17 @@ jobs:
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. SMART BACKUP ENGINE (Major Enhancement)
+    - name: 5. Auto-Backup (Always Saves Changes)
       if: always()
       run: |
         New-Item -Path "C:\Backup" -ItemType Directory -Force
-        
-        # --- ENHANCEMENT 4: SETTINGS CAPTURE ---
-        # This saves your wallpaper path and Windows personalization
+        # Capture your wallpaper and settings
         reg export "HKCU\Control Panel\Desktop" "C:\Backup\WindowsSettings.reg" /y
-        reg export "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers" "C:\Backup\WallpaperPath.reg" /y
-        
-        # --- ENHANCEMENT 5: FILE CAPTURE ---
-        # Saves everything you left on the Desktop
+        # Capture your files
         Copy-Item -Path "$HOME\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
       shell: pwsh
 
-    - name: 6. Secure Upload
+    - name: 6. Upload Backup
       if: always()
       uses: actions/upload-artifact@v4
       with:
