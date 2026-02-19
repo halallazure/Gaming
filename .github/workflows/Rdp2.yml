@@ -1,4 +1,4 @@
-name: AnyDesk-16GB-Anyhow-Final
+name: AnyDesk-16GB-Final-Anyhow
 on: workflow_dispatch
 
 jobs:
@@ -7,35 +7,28 @@ jobs:
     steps:
     - name: 1. Install AnyDesk
       run: |
+        # Download and install to the path we know works
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        Start-Sleep -Seconds 15
+        Start-Sleep -Seconds 20
       shell: pwsh
 
-    - name: 2. Force Unattended Access (Anyhow Method)
+    - name: 2. Set Password & Start Service (No Loops)
       run: |
-        $Password = "GitHub@2026"
+        # Set the password directly while the installer is still active
+        echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Kill all processes to unlock the config files
-        taskkill /F /IM AnyDesk.exe /T 2>$null
-        
-        # Method A: Direct CLI set
-        echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
-        
-        # Method B: Registry Force (This stops the 'Waiting to Accept' screen)
-        $RegPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
-        if (!(Test-Path $RegPath)) { New-Item -Path $RegPath -Force }
-        Set-ItemProperty -Path $RegPath -Name "ad_anynet_id" -Value ""
-        
-        # Restart using the correct PowerShell syntax we fixed earlier
+        # Start the service exactly once using correct syntax
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
-        Write-Host "Waiting 30 seconds for Online status..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 30
+        
+        # Give the 16GB machine time to reach the AnyDesk servers
+        Write-Host "Waiting 40 seconds for Global Online Status..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 40
       shell: pwsh
 
     - name: 3. THE REVEAL
       run: |
-        # Scraping ID directly from the system file
+        # Pull the ID from the system file
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         $PublicIP = curl.exe -s https://api.ipify.org
         
@@ -43,6 +36,7 @@ jobs:
         Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
         Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
+        Write-Host "RAM: 16 GB ACTIVE" -ForegroundColor Green
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
