@@ -1,44 +1,46 @@
-name: AnyDesk-16GB-Final-Anyhow
+name: AnyDesk-16GB-Anyhow-Final
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Install AnyDesk to Fixed Path
+    - name: 1. Install AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        # Installing to the path established in your previous logs
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 15
       shell: pwsh
 
-    - name: 2. Force Unattended Access (Fixed Argument Syntax)
+    - name: 2. Force Unattended Access (Anyhow Method)
       run: |
         $Password = "GitHub@2026"
-        # Force kill stuck processes to prevent 'Service Busy' errors
+        
+        # Kill all processes to unlock the config files
         taskkill /F /IM AnyDesk.exe /T 2>$null
         
-        # Inject the password using the working echo method
+        # Method A: Direct CLI set
         echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # CORRECTED START COMMAND: Using -ArgumentList properly to avoid positional errors
-        Write-Host "Forcing service start with correct parameters..." -ForegroundColor Cyan
-        Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
+        # Method B: Registry Force (This stops the 'Waiting to Accept' screen)
+        $RegPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
+        if (!(Test-Path $RegPath)) { New-Item -Path $RegPath -Force }
+        Set-ItemProperty -Path $RegPath -Name "ad_anynet_id" -Value ""
         
-        # Wait for the ID to register on the network
+        # Restart using the correct PowerShell syntax we fixed earlier
+        Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
+        Write-Host "Waiting 30 seconds for Online status..." -ForegroundColor Yellow
         Start-Sleep -Seconds 30
       shell: pwsh
 
     - name: 3. THE REVEAL
       run: |
-        # Directly pull ID from system config for 100% accuracy
+        # Scraping ID directly from the system file
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         $PublicIP = curl.exe -s https://api.ipify.org
         
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        if ($ID) { Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow }
-        else { Write-Host "ID NOT READY - REFRESH LOGS IN 10 SECONDS" -ForegroundColor Red }
+        Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
         Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
         Write-Host "------------------------------------------------" -ForegroundColor Green
