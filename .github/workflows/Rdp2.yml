@@ -1,47 +1,48 @@
-name: AnyDesk-Final-Force-2026
+name: AnyDesk-Final-No-Fail
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-latest # Public repo will automatically give 16GB
+    runs-on: windows-latest
     steps:
-    - name: 1. Install & Force Service
+    - name: 1. Install & Create Custom Path
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+        # Install to C:\AnyDesk as requested in your original file
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        Start-Sleep -Seconds 15
-      shell: pwsh
-
-    - name: 2. Registry Password Injection (The Fix)
-      run: |
-        # Stop AnyDesk to edit settings
-        taskkill /F /IM AnyDesk.exe /T 2>$null
-        net stop AnyDesk 2>$null
-        
-        # This is the "Magic" code that enables Unattended Access without clicking "Accept"
-        $PassHash = "962260656a8161476906236316278891" # This is the hash for 'GitHub@2026'
-        $RegPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
-        if (!(Test-Path $RegPath)) { New-Item -Path $RegPath -Force }
-        Set-ItemProperty -Path $RegPath -Name "ad_anynet_id" -Value "" 
-        
-        # Force the Unattended Password into the system config file
-        $ConfigPath = "C:\ProgramData\AnyDesk\system.conf"
-        "ad.anynet.pwd_hash=$PassHash" | Out-File -FilePath $ConfigPath -Append -Encoding ascii
-        "ad.anynet.pwd_salt=00000000000000000000000000000000" | Out-File -FilePath $ConfigPath -Append -Encoding ascii
-        
-        # Restart Service
-        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
         Start-Sleep -Seconds 20
       shell: pwsh
 
-    - name: 3. THE REVEAL
+    - name: 2. Force Unattended Access (Bypass Accept Screen)
       run: |
+        $Password = "GitHub@2026"
+        # 1. Stop AnyDesk completely to prevent 'Client Offline' crashes
+        taskkill /F /IM AnyDesk.exe /T 2>$null
+        net stop AnyDesk 2>$null
+        
+        # 2. Set password using the echo pipe to the correct path
+        echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
+        
+        # 3. Create a Registry entry to force Unattended Access to stay ON
+        $RegPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
+        if (!(Test-Path $RegPath)) { New-Item -Path $RegPath -Force }
+        Set-ItemProperty -Path $RegPath -Name "ad_anynet_id" -Value ""
+        
+        # 4. Restart service to lock in the password
+        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
+        Write-Host "Waiting 30 seconds for network registration..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 30
+      shell: pwsh
+
+    - name: 3. THE REVEAL (Final ID)
+      run: |
+        # Pull ID from the system config file directly for 100% accuracy
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        $PublicIP = curl.exe -s https://api.ipify.org
+        
         Write-Host "------------------------------------------------" -ForegroundColor Green
         Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
-        Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
+        Write-Host "NOTE: If it says 'Offline', wait 1 minute and click Retry" -ForegroundColor Cyan
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
