@@ -1,0 +1,45 @@
+name: Ultimate-Gaming-RDP-2026
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest  # In 2026, windows-2025-vs2026 is also available
+    steps:
+    - name: 1. Gaming Performance Registry Tweaks
+      run: |
+        # Enable 60 FPS RDP performance
+        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "DWMFRAMEINTERVAL" /t REG_DWORD /d 15 /f
+        # Disable NLA for LG TV Compatibility
+        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "UserAuthentication" /t REG_DWORD /d 0 /f
+        # Open Firewall for LG TV (Port 3389)
+        netsh advfirewall firewall add rule name="LG_TV_RDP" dir=in action=allow protocol=TCP localport=3389
+      shell: pwsh
+
+    - name: 2. Silent Install AnyDesk & Aria2 (Fast Downloader)
+      run: |
+        # Aria2 is essential for downloading 50GB games in minutes in 2026
+        choco install aria2 anydesk -y
+        Start-Sleep -Seconds 15
+      shell: pwsh
+
+    - name: 3. Setup AnyDesk Security
+      run: |
+        $Password = "GitHub@2026"
+        echo $Password | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
+        # Restart service to apply
+        taskkill /F /IM AnyDesk.exe /T 2>$null
+        Start-Process "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --service
+      shell: pwsh
+
+    - name: 4. Display Connection Info
+      run: |
+        $PublicIP = curl.exe -s https://api.ipify.org
+        Write-Host "------------------------------------------------" -ForegroundColor Green
+        Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
+        Write-Host "USERNAME: runneradmin" -ForegroundColor White
+        Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
+        Write-Host "------------------------------------------------" -ForegroundColor Green
+      shell: pwsh
+
+    - name: 5. Keep Alive (6 Hour Limit)
+      run: while($true){ Start-Sleep -Seconds 60 }
