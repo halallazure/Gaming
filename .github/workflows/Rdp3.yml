@@ -1,10 +1,18 @@
-name: AnyDesk-16GB-Gaming-AutoSave
+name: AnyDesk-16GB-Gaming-Sync
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
+    - name: 0. Restore Previous Backup
+      uses: dawidd6/action-download-artifact@v3
+      continue-on-error: true # Prevents crash if this is your first time running it
+      with:
+        name: My-RDP-Backup
+        path: C:\Restore
+        workflow: Rdp2.yml # Must match your filename
+
     - name: 1. Install AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
@@ -16,53 +24,47 @@ jobs:
       run: |
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
-        Write-Host "Waiting for Global Online Status..." -ForegroundColor Yellow
         Start-Sleep -Seconds 40
       shell: pwsh
 
-    - name: 3. Gaming & Space Optimization
+    - name: 3. Apply Restore & Optimization
       run: |
-        # Compress OS to free up 2-3GB for games
+        # Restore Registry Settings if they exist
+        if (Test-Path "C:\Restore\WindowsSettings.reg") {
+            reg import "C:\Restore\WindowsSettings.reg"
+        }
+        # Restore Desktop Files
+        if (Test-Path "C:\Restore\*") {
+            Copy-Item -Path "C:\Restore\*" -Destination "C:\Users\runneradmin\Desktop" -Recurse -Force
+        }
+        
+        # Performance Tweaks
         compact.exe /compactos:always
         powercfg -h off
-        
-        # Install Gaming Essentials (Brave & 7-Zip)
-        curl.exe -L -o 7zip.msi https://www.7-zip.org/a/7z2301-x64.msi
-        msiexec.exe /i 7zip.msi /qn
-        curl.exe -L -o brave_installer.exe https://laptop-updates.brave.com/latest/winx64
-        Start-Process ./brave_installer.exe -ArgumentList "/silent /install" -Wait
-        
-        # Cleanup installers to save space
-        Remove-Item 7zip.msi, brave_installer.exe -ErrorAction SilentlyContinue
       shell: pwsh
 
     - name: 4. THE REVEAL
       run: |
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        $PublicIP = curl.exe -s https://api.ipify.org
         Write-Host "------------------------------------------------" -ForegroundColor Green
         Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
-        Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
         Write-Host "RAM: 16 GB ACTIVE" -ForegroundColor Green
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
     - name: 5. Keep Alive
       run: |
-        # This loop keeps the 16GB machine active for up to 6 hours
+        # Runs for 6 hours
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-        while ($stopwatch.Elapsed -lt $timeout) {
-            Start-Sleep -Seconds 60
-        }
+        while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
     - name: 6. Auto-Backup Progress
-      if: always() # Runs even if the session is manually stopped
+      if: always()
       run: |
         New-Item -Path "C:\Backup" -ItemType Directory -Force
-        # Export settings and save Desktop files
         reg export "HKCU\Software" "C:\Backup\WindowsSettings.reg" /y
         Copy-Item -Path "C:\Users\runneradmin\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
       shell: pwsh
