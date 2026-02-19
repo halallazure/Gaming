@@ -1,47 +1,53 @@
-name: AnyDesk-16GB-Final-Force
+name: AnyDesk-16GB-Self-Healing
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Install to Custom Path
+    - name: 1. Install AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        # Install to C:\AnyDesk as used in your previous attempts
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 20
       shell: pwsh
 
-    - name: 2. Force Unattended Access (Bypass "Accept" Screen)
+    - name: 2. Force Configuration (Wait-Loop Fix)
       run: |
         $Password = "GitHub@2026"
-        # Stop AnyDesk completely to allow configuration changes
-        taskkill /F /IM AnyDesk.exe /T 2>$null
-        net stop AnyDesk 2>$null
+        Write-Host "Cleaning up AnyDesk processes..." -ForegroundColor Yellow
         
-        # Manually set the password using the CLI while service is stopped
+        # Force kill everything and wait for Windows to release the service
+        taskkill /F /IM AnyDesk.exe /T 2>$null
+        net stop AnyDesk /y 2>$null
+        Start-Sleep -Seconds 10 
+
+        # Set the password while the service is definitely stopped
         echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Registry Fix: Ensure the service knows it is in unattended mode
-        $RegPath = "HKLM:\SOFTWARE\WOW6432Node\AnyDesk"
-        if (!(Test-Path $RegPath)) { New-Item -Path $RegPath -Force }
-        Set-ItemProperty -Path $RegPath -Name "ad_anynet_id" -Value ""
+        # Start service using a 'Force' method to avoid Exit Code 1
+        Write-Host "Restarting service safely..." -ForegroundColor Cyan
+        & "C:\AnyDesk\AnyDesk.exe" --service
         
-        # Restart the service and WAIT for it to connect to the internet
-        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
-        Write-Host "Waiting 45 seconds for AnyDesk to go Online..." -ForegroundColor Yellow
+        # Final safety check: if it's not running, start it manually
+        if ((Get-Process AnyDesk -ErrorAction SilentlyContinue).Count -eq 0) {
+           Start-Process "C:\AnyDesk\AnyDesk.exe" --argumentlist "--service"
+        }
+
+        Write-Host "Waiting for ID generation..." -ForegroundColor Yellow
         Start-Sleep -Seconds 45
       shell: pwsh
 
     - name: 3. THE REVEAL
       run: |
-        # Pull the ID directly from the system config file
+        # Pull ID from the config file for 100% accuracy
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        $PublicIP = curl.exe -s https://api.ipify.org
         
         Write-Host "------------------------------------------------" -ForegroundColor Green
         Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
+        Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
