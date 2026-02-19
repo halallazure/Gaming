@@ -1,59 +1,51 @@
-name: GitHub-Gaming-16GB-With-ID-Fix
+name: AnyDesk-16GB-ID-Fixed
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025 # Use the 2026-spec 16GB runner
     steps:
-    - name: 1. Install & Force ID Generation
+    - name: 1. Install AnyDesk to Fixed Path
       run: |
-        # Download and Install to the path we know works
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 15
-
-        # Set the Password
-        $Password = "GitHub@2026"
-        echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
-
-        # Restart Service to force ID registration
-        taskkill /F /IM AnyDesk.exe /T 2>$null
-        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
-        Start-Sleep -Seconds 20
       shell: pwsh
 
-    - name: 2. The ID Finder (Repeats until found)
+    - name: 2. Set Password & Force Registration
       run: |
-        Write-Host "Waiting for AnyDesk ID to generate..." -ForegroundColor Yellow
-        $AnyDeskID = ""
-        $attempt = 0
+        $Password = "GitHub@2026"
+        # Set password at the correct C:\AnyDesk location
+        echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
+        # Kill and Restart the service to force the ID to generate
+        taskkill /F /IM AnyDesk.exe /T 2>$null
+        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
+        Write-Host "Waiting 30 seconds for AnyDesk ID to register..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 30
+      shell: pwsh
+
+    - name: 3. The Ultimate ID Scraper
+      run: |
+        # Method A: Try Command Line
+        $ID = & "C:\AnyDesk\AnyDesk.exe" --get-id
         
-        # Loop up to 10 times to find the ID
-        while (-not $AnyDeskID -and $attempt -lt 10) {
-            $AnyDeskID = & "C:\AnyDesk\AnyDesk.exe" --get-id
-            if (-not $AnyDeskID) {
-                Start-Sleep -Seconds 5
-                $attempt++
-            }
+        # Method B: Scrape the system.conf file directly if Method A is blank
+        if (!$ID) {
+           $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         }
 
         $PublicIP = curl.exe -s https://api.ipify.org
-        
         Write-Host "------------------------------------------------" -ForegroundColor Green
+        Write-Host "FOR TABLET (ID): $ID" -ForegroundColor Yellow
         Write-Host "FOR LG TV (IP): $PublicIP" -ForegroundColor Cyan
-        if ($AnyDeskID) {
-          Write-Host "FOR TABLET (ID): $AnyDeskID" -ForegroundColor Yellow
-        } else {
-          Write-Host "ID ERROR: Please check AnyDesk service status" -ForegroundColor Red
-        }
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
         Write-Host "RAM: 16 GB ACTIVE" -ForegroundColor Green
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 3. Gaming Tweak & Keep Alive
+    - name: 4. Unlock TV & Keep Alive
       run: |
-        # Force 60FPS for your TV
-        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "DWMFRAMEINTERVAL" /t REG_DWORD /d 15 /f
+        # Disable NLA and open port 3389 for LG TV
+        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "UserAuthentication" /t REG_DWORD /d 0 /f
+        netsh advfirewall firewall add rule name="LG_TV_FIX" dir=in action=allow protocol=TCP localport=3389
         while($true){ Start-Sleep -Seconds 60 }
-      shell: pwsh
