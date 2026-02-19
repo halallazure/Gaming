@@ -1,44 +1,49 @@
-name: AnyDesk-Final-Auto-Connect
+name: AnyDesk-Final-Fix-2026
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025  # In 2026, this ensures the 16GB High-Performance machine
     steps:
-    - name: 1. Install AnyDesk to Fixed Path
+    - name: 1. Install to Custom Path
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        Start-Sleep -Seconds 15
+        Start-Sleep -Seconds 20
       shell: pwsh
 
-    - name: 2. Force Unattended Access Password
+    - name: 2. Inject Unattended Password (Proper Sequence)
       run: |
         $Password = "GitHub@2026"
-        # We must stop the service first to write the password into the registry safely
+        # STOP the service first; setting a password while it's active often fails
         taskkill /F /IM AnyDesk.exe /T 2>$null
         net stop AnyDesk 2>$null
         
-        # Set the password using the echo pipe directly to the custom path
+        # Inject password directly using the echo pipe
         echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Restart the service to apply the "Unattended Access" settings
+        # RESTART the service to lock in the new password
         Start-Process "C:\AnyDesk\AnyDesk.exe" --service
         Start-Sleep -Seconds 15
       shell: pwsh
 
-    - name: 3. THE REVEAL (Capture ID)
+    - name: 3. The Revelation (ID & LG TV IP)
       run: |
-        # Scraping the ID from the system config file as a backup
-        $FileID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" -ErrorAction SilentlyContinue | ForEach-Object { $_.Matches.Groups[1].Value }
+        # Scrape ID from config file if CLI is busy
+        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         $PublicIP = curl.exe -s https://api.ipify.org
         
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "ANYDESK ID: $FileID" -ForegroundColor Yellow
-        Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
+        Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
+        Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive
-      run: while($true){ Start-Sleep -Seconds 60 }
+    - name: 4. Unlock LG TV Firewall & Keep Alive
+      run: |
+        # Unlock Port 3389 for direct TV connection
+        netsh advfirewall firewall add rule name="LG_TV_FIX" dir=in action=allow protocol=TCP localport=3389
+        # Disable NLA for older TV support
+        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "UserAuthentication" /t REG_DWORD /d 0 /f
+        while($true){ Start-Sleep -Seconds 60 }
