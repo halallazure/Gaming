@@ -1,9 +1,9 @@
-name: AnyDesk-16GB-ID-Fixed
+name: AnyDesk-Final-Auto-Connect
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: windows-2025 # Use the 2026-spec 16GB runner
+    runs-on: windows-latest
     steps:
     - name: 1. Install AnyDesk to Fixed Path
       run: |
@@ -12,40 +12,33 @@ jobs:
         Start-Sleep -Seconds 15
       shell: pwsh
 
-    - name: 2. Set Password & Force Registration
+    - name: 2. Force Unattended Access Password
       run: |
         $Password = "GitHub@2026"
-        # Set password at the correct C:\AnyDesk location
-        echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
-        # Kill and Restart the service to force the ID to generate
+        # We must stop the service first to write the password into the registry safely
         taskkill /F /IM AnyDesk.exe /T 2>$null
-        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
-        Write-Host "Waiting 30 seconds for AnyDesk ID to register..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 30
-      shell: pwsh
-
-    - name: 3. The Ultimate ID Scraper
-      run: |
-        # Method A: Try Command Line
-        $ID = & "C:\AnyDesk\AnyDesk.exe" --get-id
+        net stop AnyDesk 2>$null
         
-        # Method B: Scrape the system.conf file directly if Method A is blank
-        if (!$ID) {
-           $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        }
+        # Set the password using the echo pipe directly to the custom path
+        echo $Password | & "C:\AnyDesk\AnyDesk.exe" --set-password
+        
+        # Restart the service to apply the "Unattended Access" settings
+        Start-Process "C:\AnyDesk\AnyDesk.exe" --service
+        Start-Sleep -Seconds 15
+      shell: pwsh
 
+    - name: 3. THE REVEAL (Capture ID)
+      run: |
+        # Scraping the ID from the system config file as a backup
+        $FileID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" -ErrorAction SilentlyContinue | ForEach-Object { $_.Matches.Groups[1].Value }
         $PublicIP = curl.exe -s https://api.ipify.org
+        
         Write-Host "------------------------------------------------" -ForegroundColor Green
-        Write-Host "FOR TABLET (ID): $ID" -ForegroundColor Yellow
-        Write-Host "FOR LG TV (IP): $PublicIP" -ForegroundColor Cyan
+        Write-Host "ANYDESK ID: $FileID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
-        Write-Host "RAM: 16 GB ACTIVE" -ForegroundColor Green
+        Write-Host "LG TV IP: $PublicIP" -ForegroundColor Cyan
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Unlock TV & Keep Alive
-      run: |
-        # Disable NLA and open port 3389 for LG TV
-        reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" /v "UserAuthentication" /t REG_DWORD /d 0 /f
-        netsh advfirewall firewall add rule name="LG_TV_FIX" dir=in action=allow protocol=TCP localport=3389
-        while($true){ Start-Sleep -Seconds 60 }
+    - name: 4. Keep Alive
+      run: while($true){ Start-Sleep -Seconds 60 }
