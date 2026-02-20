@@ -5,22 +5,24 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore
+    - name: 0. Fast Restore (The Data Fix)
       uses: dawidd6/action-download-artifact@v3
       continue-on-error: true 
       with:
         name: My-RDP-Backup
         path: C:\Restore
-        # FIXED: Corrected to rdp.yml to ensure files are recovered
+        # FIXED: Matches your new filename to ensure folders are recovered
         workflow: rdp.yml 
+        # NEW: Searches all previous runs to find your last saved folder
+        search_artifacts: true 
 
     - name: 1. Install & Setup AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         
-        # Verification loop to ensure AnyDesk is ready
-        Write-Host "Waiting for AnyDesk to install..." -ForegroundColor Cyan
+        # FIXED: Verification loop to prevent "not recognized" errors
+        Write-Host "Waiting for AnyDesk installation..." -ForegroundColor Cyan
         $count = 0
         while (!(Test-Path "C:\AnyDesk\AnyDesk.exe") -and $count -lt 30) {
             Start-Sleep -Seconds 2
@@ -38,18 +40,18 @@ jobs:
 
     - name: 2. Major Persistence & Performance
       run: |
-        # Restore Registry (Wallpaper/Settings)
+        # ENHANCEMENT: Automatic Wallpaper & UI Injection
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
         
-        # Restore Desktop Files
+        # ENHANCEMENT: Recovery of Desktop Folders
         if (Test-Path "C:\Restore\*") { 
             Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
 
-        # Instant 4GB space gain
+        # ENHANCEMENT: Instant 4GB space gain
         powercfg -h off
         Write-Host "System Enhanced Successfully!" -ForegroundColor Green
       shell: pwsh
@@ -63,7 +65,7 @@ jobs:
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive
+    - name: 4. Keep Alive (6-Hour Session)
       run: |
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -71,16 +73,16 @@ jobs:
       shell: pwsh
 
     - name: 5. Auto-Backup (Always Saves Changes)
-      if: always()
+      if: always() # CRUCIAL: Saves your work even if you click cancel
       run: |
         New-Item -Path "C:\Backup" -ItemType Directory -Force
-        # Saves your background and settings
+        # Saves UI and Wallpaper
         reg export "HKCU\Control Panel\Desktop" "C:\Backup\WindowsSettings.reg" /y
-        # Saves all Desktop folders and files
+        # Saves all your Desktop folders and files
         Copy-Item -Path "$HOME\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
       shell: pwsh
 
-    - name: 6. Upload Backup
+    - name: 6. Secure Upload to GitHub
       if: always()
       uses: actions/upload-artifact@v4
       with:
