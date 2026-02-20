@@ -1,34 +1,37 @@
-name: AnyDesk-40GB-Dual-Sync-Final
+name: AnyDesk-40GB-Dual-Sync-Final-V2
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Using EXE Paths)
+    - name: 0. Fast Restore (Smart Path Search)
       continue-on-error: true
       run: |
-        # Download and Install MEGA-CMD via MSI for stability
+        # Download and Install MEGA-CMD MSI
         curl.exe -L -o megacmd.msi https://mega.nz/megacmd/MEGAcmdSetup.msi
         msiexec.exe /i megacmd.msi /qn /norestart
+        Start-Sleep -Seconds 20
         
-        # Wait for installation to finish
-        Start-Sleep -Seconds 15
+        # SMART SEARCH: Find where mega-exec.exe actually lives
+        $mega = (Get-ChildItem -Path "C:\Program Files*","C:\Users\runneradmin\AppData" -Filter "mega-exec.exe" -Recurse -ErrorAction SilentlyContinue).FullName | Select-Object -First 1
         
-        # Direct path to EXE
-        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        
-        New-Item -Path "C:\Restore" -ItemType Directory -Force
-        
-        # Login and Pull from Account 1
-        & $mega login halallazure@gmail.com 123456seven
-        & $mega get /RDP_Backups/Part1/* C:\Restore\
-        & $mega logout
-        
-        # Login and Pull from Account 2
-        & $mega login halallyeager@gmail.com 123456seven
-        & $mega get /RDP_Backups/Part2/* C:\Restore\
-        & $mega logout
+        if ($mega) {
+            Write-Host "Found MEGA at: $mega" -ForegroundColor Green
+            New-Item -Path "C:\Restore" -ItemType Directory -Force
+            
+            # Login and Pull from Account 1
+            & $mega login halallazure@gmail.com 123456seven
+            & $mega get /RDP_Backups/Part1/* C:\Restore\
+            & $mega logout
+            
+            # Login and Pull from Account 2
+            & $mega login halallyeager@gmail.com 123456seven
+            & $mega get /RDP_Backups/Part2/* C:\Restore\
+            & $mega logout
+        } else {
+            Write-Host "MEGA could not be found. Check logs." -ForegroundColor Red
+        }
       shell: pwsh
 
     - name: 1. Setup AnyDesk
@@ -68,32 +71,36 @@ jobs:
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE (Direct EXE Sync)
+    - name: 5. TOTAL SAVE (Smart Path Sync)
       if: always()
       run: |
-        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+        # Search for MEGA again to ensure it's available for backup
+        $mega = (Get-ChildItem -Path "C:\Program Files*","C:\Users\runneradmin\AppData" -Filter "mega-exec.exe" -Recurse -ErrorAction SilentlyContinue).FullName | Select-Object -First 1
         
-        $items = Get-ChildItem -Path "$HOME\Desktop\*"
-        $half = [Math]::Ceiling($items.Count / 2)
-        $group1 = $items | Select-Object -First $half
-        $group2 = $items | Select-Object -Last ($items.Count - $half)
+        if ($mega) {
+            reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+            
+            $items = Get-ChildItem -Path "$HOME\Desktop\*"
+            $half = [Math]::Ceiling($items.Count / 2)
+            $group1 = $items | Select-Object -First $half
+            $group2 = $items | Select-Object -Last ($items.Count - $half)
 
-        New-Item -Path "C:\Backup1" -ItemType Directory -Force
-        New-Item -Path "C:\Backup2" -ItemType Directory -Force
-        if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
-        if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
+            New-Item -Path "C:\Backup1" -ItemType Directory -Force
+            New-Item -Path "C:\Backup2" -ItemType Directory -Force
+            if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
+            if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
 
-        # Upload Group 1
-        & $mega login halallazure@gmail.com 123456seven
-        & $mega rm -r /RDP_Backups/Part1
-        & $mega mkdir -p /RDP_Backups/Part1
-        & $mega put "C:\Backup1\*" /RDP_Backups/Part1/
-        & $mega logout
+            # Upload Group 1
+            & $mega login halallazure@gmail.com 123456seven
+            & $mega rm -r /RDP_Backups/Part1
+            & $mega mkdir -p /RDP_Backups/Part1
+            & $mega put "C:\Backup1\*" /RDP_Backups/Part1/
+            & $mega logout
 
-        # Upload Group 2
-        & $mega login halallyeager@gmail.com 123456seven
-        & $mega rm -r /RDP_Backups/Part2
-        & $mega mkdir -p /RDP_Backups/Part2
-        & $mega put "C:\Backup2\*" /RDP_Backups/Part2/
+            # Upload Group 2
+            & $mega login halallyeager@gmail.com 123456seven
+            & $mega rm -r /RDP_Backups/Part2
+            & $mega mkdir -p /RDP_Backups/Part2
+            & $mega put "C:\Backup2\*" /RDP_Backups/Part2/
+        }
       shell: pwsh
