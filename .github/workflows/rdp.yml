@@ -1,40 +1,30 @@
-name: AnyDesk-40GB-Dual-Sync-Final-V2
+name: AnyDesk-MEGA-Reliable-Sync
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Smart Path Search)
+    - name: 0. Fast Restore (Using Portable MEGA)
       continue-on-error: true
       run: |
-        # Download and Install MEGA-CMD MSI
-        curl.exe -L -o megacmd.msi https://mega.nz/megacmd/MEGAcmdSetup.msi
-        msiexec.exe /i megacmd.msi /qn /norestart
-        Start-Sleep -Seconds 20
+        # Download a portable, reliable version of MEGA CMD
+        curl.exe -L -o megacmd.zip https://mega.nz/megacmd/MEGAcmdSetup.exe
+        # We will use the direct installer with a forced 'No Restart' flag
+        Start-Process megacmd.exe -ArgumentList "/S /v/qn" -Wait
         
-        # SMART SEARCH: Find where mega-exec.exe actually lives
-        $mega = (Get-ChildItem -Path "C:\Program Files*","C:\Users\runneradmin\AppData" -Filter "mega-exec.exe" -Recurse -ErrorAction SilentlyContinue).FullName | Select-Object -First 1
+        $mega = "C:\Users\runneradmin\AppData\Local\MEGAcmd\mega-exec.exe"
+        if (!(Test-Path $mega)) { $mega = "C:\Program Files (x86)\MEGAcmd\mega-exec.exe" }
         
-        if ($mega) {
-            Write-Host "Found MEGA at: $mega" -ForegroundColor Green
-            New-Item -Path "C:\Restore" -ItemType Directory -Force
-            
-            # Login and Pull from Account 1
-            & $mega login halallazure@gmail.com 123456seven
-            & $mega get /RDP_Backups/Part1/* C:\Restore\
-            & $mega logout
-            
-            # Login and Pull from Account 2
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega get /RDP_Backups/Part2/* C:\Restore\
-            & $mega logout
-        } else {
-            Write-Host "MEGA could not be found. Check logs." -ForegroundColor Red
-        }
+        New-Item -Path "C:\Restore" -ItemType Directory -Force
+        
+        # Pull from your primary account
+        & $mega login halallazure@gmail.com 123456seven
+        & $mega get /RDP_Backups/Latest/* C:\Restore\
+        & $mega logout
       shell: pwsh
 
-    - name: 1. Setup AnyDesk
+    - name: 1. Install & Setup AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
@@ -43,12 +33,14 @@ jobs:
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
       shell: pwsh
 
-    - name: 2. Inject Wallpaper, Settings & Folders
+    - name: 2. Restore Desktop Content
       run: |
+        # Apply Wallpaper/Settings Registry
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
+        # Restore folders to Desktop
         if (Test-Path "C:\Restore\*") { 
             Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
@@ -64,43 +56,23 @@ jobs:
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive
+    - name: 4. Keep Alive (6-Hour Session)
       run: |
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE (Smart Path Sync)
+    - name: 5. TOTAL SAVE TO MEGA
       if: always()
       run: |
-        # Search for MEGA again to ensure it's available for backup
-        $mega = (Get-ChildItem -Path "C:\Program Files*","C:\Users\runneradmin\AppData" -Filter "mega-exec.exe" -Recurse -ErrorAction SilentlyContinue).FullName | Select-Object -First 1
+        $mega = "C:\Users\runneradmin\AppData\Local\MEGAcmd\mega-exec.exe"
+        if (!(Test-Path $mega)) { $mega = "C:\Program Files (x86)\MEGAcmd\mega-exec.exe" }
         
-        if ($mega) {
-            reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
-            
-            $items = Get-ChildItem -Path "$HOME\Desktop\*"
-            $half = [Math]::Ceiling($items.Count / 2)
-            $group1 = $items | Select-Object -First $half
-            $group2 = $items | Select-Object -Last ($items.Count - $half)
-
-            New-Item -Path "C:\Backup1" -ItemType Directory -Force
-            New-Item -Path "C:\Backup2" -ItemType Directory -Force
-            if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
-            if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
-
-            # Upload Group 1
-            & $mega login halallazure@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part1
-            & $mega mkdir -p /RDP_Backups/Part1
-            & $mega put "C:\Backup1\*" /RDP_Backups/Part1/
-            & $mega logout
-
-            # Upload Group 2
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part2
-            & $mega mkdir -p /RDP_Backups/Part2
-            & $mega put "C:\Backup2\*" /RDP_Backups/Part2/
-        }
+        reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+        
+        & $mega login halallazure@gmail.com 123456seven
+        & $mega rm -r /RDP_Backups/Latest
+        & $mega mkdir -p /RDP_Backups/Latest
+        & $mega put "$HOME\Desktop\*" /RDP_Backups/Latest/
       shell: pwsh
