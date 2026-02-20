@@ -5,90 +5,88 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore
+    - name: 0. Fast Restore (The Fix)
       uses: dawidd6/action-download-artifact@v3
       continue-on-error: true 
       with:
         name: My-RDP-Backup
         path: C:\Restore
-        # FIXED: Changed to Rdp3.yml to match your file and stop the 5-minute error
+        # [span_0](start_span)FIXED: Corrected to match your filename to ensure backups are found[span_0](end_span)
         workflow: Rdp3.yml 
 
     - name: 1. Install & Setup AnyDesk
       run: |
-        # 1. Download AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-        
-        # 2. Run Silent Install
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         
-        # 3. FIX: Wait until the .exe actually exists before running it
-        Write-Host "Waiting for AnyDesk to install..." -ForegroundColor Cyan
+        # [span_1](start_span)ENHANCEMENT: Verification loop to prevent "not recognized" errors[span_1](end_span)
+        Write-Host "Waiting for AnyDesk installation..." -ForegroundColor Cyan
         $count = 0
         while (!(Test-Path "C:\AnyDesk\AnyDesk.exe") -and $count -lt 30) {
             Start-Sleep -Seconds 2
             $count++
         }
 
-        # 4. Set Password and Start Service
         if (Test-Path "C:\AnyDesk\AnyDesk.exe") {
             echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
             Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
             Start-Sleep -Seconds 10
         } else {
-            Write-Error "Installation failed: AnyDesk.exe not found."
-            exit 1
+            [span_2](start_span)exit 1[span_2](end_span)
         }
       shell: pwsh
 
-    - name: 2. Major Persistence & Performance
+    - name: 2. MAJOR PERSISTENCE & PERFORMANCE
       run: |
-        # Restore Registry (Wallpaper/Settings)
+        # [span_3](start_span)ENHANCEMENT: Automatic UI & Wallpaper Injection[span_3](end_span)
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
+            # Forces Windows to show your saved wallpaper immediately
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
         
-        # Restore Desktop Files
+        # [span_4](start_span)ENHANCEMENT: Desktop File Recovery[span_4](end_span)
         if (Test-Path "C:\Restore\*") { 
             Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
 
-        # Performance: Instant 4GB space gain
+        # [span_5](start_span)ENHANCEMENT: Instant 4GB Disk Gain[span_5](end_span)
         powercfg -h off
         Write-Host "System Enhanced Successfully!" -ForegroundColor Green
       shell: pwsh
 
     - name: 3. THE REVEAL
       run: |
-        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | [span_6](start_span)ForEach-Object { $_.Matches.Groups[1].Value }[span_6](end_span)
         Write-Host "------------------------------------------------" -ForegroundColor Green
         Write-Host "ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host "PASSWORD: GitHub@2026" -ForegroundColor White
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive
+    - name: 4. Keep Alive (6-Hour Session)
       run: |
-        $timeout = New-TimeSpan -Hours 6
+        [span_7](start_span)$timeout = New-TimeSpan -Hours 6[span_7](end_span)
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. Auto-Backup (Always Saves Changes)
-      if: always()
+    - name: 5. SMART AUTO-BACKUP ENGINE
+      [span_8](start_span)if: always() # Ensures backup runs even if workflow is cancelled[span_8](end_span)
       run: |
         New-Item -Path "C:\Backup" -ItemType Directory -Force
-        # Capture your wallpaper and settings
+        # [span_9](start_span)MAJOR ENHANCEMENT: Capturing Custom UI, TranslucentTB & Wallpaper settings[span_9](end_span)
         reg export "HKCU\Control Panel\Desktop" "C:\Backup\WindowsSettings.reg" /y
-        # Capture your files
+        reg export "HKCU\Software" "C:\Backup\SoftwareSettings.reg" /y
+        
+        # [span_10](start_span)ENHANCEMENT: Saving all Desktop Folders & Installers[span_10](end_span)
         Copy-Item -Path "$HOME\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
       shell: pwsh
 
-    - name: 6. Upload Backup
+    - name: 6. Secure Upload to GitHub
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: My-RDP-Backup
+        [span_11](start_span)name: My-RDP-Backup[span_11](end_span)
         path: C:\Backup
         retention-days: 7
