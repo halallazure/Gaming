@@ -1,30 +1,37 @@
-name: AnyDesk-MEGA-Reliable-Sync
+name: AnyDesk-MEGA-Path-Corrected
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Using Portable MEGA)
+    - name: 0. Fast Restore (Path Fix)
       continue-on-error: true
       run: |
-        # Download a portable, reliable version of MEGA CMD
-        curl.exe -L -o megacmd.zip https://mega.nz/megacmd/MEGAcmdSetup.exe
-        # We will use the direct installer with a forced 'No Restart' flag
-        Start-Process megacmd.exe -ArgumentList "/S /v/qn" -Wait
+        # 1. Download MEGA-CMD Installer
+        curl.exe -L -o megacmd_setup.exe https://mega.nz/megacmd/MEGAsyncSetup.exe
         
+        # 2. Verify file exists and then Install Silently
+        if (Test-Path "megacmd_setup.exe") {
+            Start-Process ".\megacmd_setup.exe" -ArgumentList "/S" -Wait
+        }
+        
+        Start-Sleep -Seconds 20
+        
+        # 3. Locate the Executable
         $mega = "C:\Users\runneradmin\AppData\Local\MEGAcmd\mega-exec.exe"
         if (!(Test-Path $mega)) { $mega = "C:\Program Files (x86)\MEGAcmd\mega-exec.exe" }
         
-        New-Item -Path "C:\Restore" -ItemType Directory -Force
-        
-        # Pull from your primary account
-        & $mega login halallazure@gmail.com 123456seven
-        & $mega get /RDP_Backups/Latest/* C:\Restore\
-        & $mega logout
+        # 4. Restore files from halallazure@gmail.com
+        if (Test-Path $mega) {
+            New-Item -Path "C:\Restore" -ItemType Directory -Force
+            & $mega login halallazure@gmail.com 123456seven
+            & $mega get /RDP_Backups/Latest/* C:\Restore\
+            & $mega logout
+        }
       shell: pwsh
 
-    - name: 1. Install & Setup AnyDesk
+    - name: 1. Setup AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
@@ -33,9 +40,9 @@ jobs:
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
       shell: pwsh
 
-    - name: 2. Restore Desktop Content
+    - name: 2. Inject Wallpaper & Folders
       run: |
-        # Apply Wallpaper/Settings Registry
+        # Apply Wallpaper/Settings
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
@@ -56,23 +63,24 @@ jobs:
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive (6-Hour Session)
+    - name: 4. Keep Alive
       run: |
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE TO MEGA
+    - name: 5. TOTAL SAVE (Always Saves)
       if: always()
       run: |
         $mega = "C:\Users\runneradmin\AppData\Local\MEGAcmd\mega-exec.exe"
         if (!(Test-Path $mega)) { $mega = "C:\Program Files (x86)\MEGAcmd\mega-exec.exe" }
         
-        reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
-        
-        & $mega login halallazure@gmail.com 123456seven
-        & $mega rm -r /RDP_Backups/Latest
-        & $mega mkdir -p /RDP_Backups/Latest
-        & $mega put "$HOME\Desktop\*" /RDP_Backups/Latest/
+        if (Test-Path $mega) {
+            reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+            & $mega login halallazure@gmail.com 123456seven
+            & $mega rm -r /RDP_Backups/Latest
+            & $mega mkdir -p /RDP_Backups/Latest
+            & $mega put "$HOME\Desktop\*" /RDP_Backups/Latest/
+        }
       shell: pwsh
