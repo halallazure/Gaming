@@ -1,28 +1,30 @@
-name: AnyDesk-40GB-Dual-Sync-FinalFix
+name: AnyDesk-40GB-Dual-Sync-PathFix
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Using Chocolatey)
+    - name: 0. Fast Restore (Direct Path Fix)
       continue-on-error: true
       run: |
-        # Use Chocolatey to install MEGA-CMD correctly for this OS
+        # Install MEGA-CMD
         choco install megacmd -y
-        $env:PATH += ";C:\Program Files\MEGAcmd"
+        
+        # Define the direct path to MEGA commands
+        $mega = "C:\Program Files\MEGAcmd"
         
         New-Item -Path "C:\Restore" -ItemType Directory -Force
         
-        # Login and Pull from Account 1
-        mega-login halallazure@gmail.com 123456seven
-        mega-get /RDP_Backups/Part1/* C:\Restore\
-        mega-logout
+        # Login and Pull from Account 1 using direct file paths
+        & "$mega\mega-login.bat" halallazure@gmail.com 123456seven
+        & "$mega\mega-get.bat" /RDP_Backups/Part1/* C:\Restore\
+        & "$mega\mega-logout.bat"
         
         # Login and Pull from Account 2
-        mega-login halallyeager@gmail.com 123456seven
-        mega-get /RDP_Backups/Part2/* C:\Restore\
-        mega-logout
+        & "$mega\mega-login.bat" halallyeager@gmail.com 123456seven
+        & "$mega\mega-get.bat" /RDP_Backups/Part2/* C:\Restore\
+        & "$mega\mega-logout.bat"
       shell: pwsh
 
     - name: 1. Setup AnyDesk
@@ -34,7 +36,7 @@ jobs:
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
       shell: pwsh
 
-    - name: 2. Restore Desktop Content
+    - name: 2. Inject Wallpaper, Settings & Folders
       run: |
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
@@ -62,10 +64,10 @@ jobs:
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE (Dual Account Sync)
+    - name: 5. TOTAL SAVE (Direct Path Sync)
       if: always()
       run: |
-        $env:PATH += ";C:\Program Files\MEGAcmd"
+        $mega = "C:\Program Files\MEGAcmd"
         reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
         
         $items = Get-ChildItem -Path "$HOME\Desktop\*"
@@ -78,14 +80,16 @@ jobs:
         if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
         if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
 
-        mega-login halallazure@gmail.com 123456seven
-        mega-rm -r /RDP_Backups/Part1
-        mega-mkdir /RDP_Backups/Part1
-        mega-put "C:\Backup1\*" /RDP_Backups/Part1/
-        mega-logout
+        # Upload Group 1
+        & "$mega\mega-login.bat" halallazure@gmail.com 123456seven
+        & "$mega\mega-rm.bat" -r /RDP_Backups/Part1
+        & "$mega\mega-mkdir.bat" -p /RDP_Backups/Part1
+        & "$mega\mega-put.bat" "C:\Backup1\*" /RDP_Backups/Part1/
+        & "$mega\mega-logout.bat"
 
-        mega-login halallyeager@gmail.com 123456seven
-        mega-rm -r /RDP_Backups/Part2
-        mega-mkdir /RDP_Backups/Part2
-        mega-put "C:\Backup2\*" /RDP_Backups/Part2/
+        # Upload Group 2
+        & "$mega\mega-login.bat" halallyeager@gmail.com 123456seven
+        & "$mega\mega-rm.bat" -r /RDP_Backups/Part2
+        & "$mega\mega-mkdir.bat" -p /RDP_Backups/Part2
+        & "$mega\mega-put.bat" "C:\Backup2\*" /RDP_Backups/Part2/
       shell: pwsh
