@@ -1,4 +1,4 @@
-name: AnyDesk-40GB-Dual-Sync
+name: AnyDesk-40GB-Dual-Sync-Fixed
 on: workflow_dispatch
 
 jobs:
@@ -8,10 +8,14 @@ jobs:
     - name: 0. Fast Restore (Pulling from 40GB Cloud)
       continue-on-error: true
       run: |
-        # Install MEGA Tools
-        curl.exe -L -o megacmd.exe https://mega.nz/megacmd/MEGAsyncSetup.exe
-        Start-Process ./megacmd.exe -ArgumentList "/S" -Wait
-        $env:PATH += ";C:\AppData\Local\MEGAcmd"
+        # Fixed Download Link for MEGA CMD
+        curl.exe -L -o megasetup.exe https://mega.nz/megacmd/MEGAsyncSetup.exe
+        
+        # Install with specific parameters for GitHub Runners
+        Start-Process ./megasetup.exe -ArgumentList "/S" -Wait
+        
+        # Set Path so the runner can see the 'mega-' commands
+        $env:PATH += ";C:\AppData\Local\MEGAcmd;C:\Program Files\MEGAcmd"
         New-Item -Path "C:\Restore" -ItemType Directory -Force
         
         # Login and Pull from Account 1
@@ -36,7 +40,7 @@ jobs:
 
     - name: 2. Inject Wallpaper, Settings & Folders
       run: |
-        # Restore Registry Settings (Wallpaper/Themes)
+        # Apply Registry Settings (Wallpaper/Themes)
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
@@ -68,7 +72,7 @@ jobs:
     - name: 5. TOTAL SAVE (Split Sync to 2 Accounts)
       if: always()
       run: |
-        $env:PATH += ";C:\AppData\Local\MEGAcmd"
+        $env:PATH += ";C:\AppData\Local\MEGAcmd;C:\Program Files\MEGAcmd"
         # Export settings before backup
         reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
         
