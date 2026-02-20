@@ -1,30 +1,34 @@
-name: AnyDesk-40GB-Dual-Sync-PathFix
+name: AnyDesk-40GB-Dual-Sync-Final
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Direct Path Fix)
+    - name: 0. Fast Restore (Using EXE Paths)
       continue-on-error: true
       run: |
-        # Install MEGA-CMD
-        choco install megacmd -y
+        # Download and Install MEGA-CMD via MSI for stability
+        curl.exe -L -o megacmd.msi https://mega.nz/megacmd/MEGAcmdSetup.msi
+        msiexec.exe /i megacmd.msi /qn /norestart
         
-        # Define the direct path to MEGA commands
-        $mega = "C:\Program Files\MEGAcmd"
+        # Wait for installation to finish
+        Start-Sleep -Seconds 15
+        
+        # Direct path to EXE
+        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         
         New-Item -Path "C:\Restore" -ItemType Directory -Force
         
-        # Login and Pull from Account 1 using direct file paths
-        & "$mega\mega-login.bat" halallazure@gmail.com 123456seven
-        & "$mega\mega-get.bat" /RDP_Backups/Part1/* C:\Restore\
-        & "$mega\mega-logout.bat"
+        # Login and Pull from Account 1
+        & $mega login halallazure@gmail.com 123456seven
+        & $mega get /RDP_Backups/Part1/* C:\Restore\
+        & $mega logout
         
         # Login and Pull from Account 2
-        & "$mega\mega-login.bat" halallyeager@gmail.com 123456seven
-        & "$mega\mega-get.bat" /RDP_Backups/Part2/* C:\Restore\
-        & "$mega\mega-logout.bat"
+        & $mega login halallyeager@gmail.com 123456seven
+        & $mega get /RDP_Backups/Part2/* C:\Restore\
+        & $mega logout
       shell: pwsh
 
     - name: 1. Setup AnyDesk
@@ -64,10 +68,10 @@ jobs:
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE (Direct Path Sync)
+    - name: 5. TOTAL SAVE (Direct EXE Sync)
       if: always()
       run: |
-        $mega = "C:\Program Files\MEGAcmd"
+        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
         
         $items = Get-ChildItem -Path "$HOME\Desktop\*"
@@ -81,15 +85,15 @@ jobs:
         if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
 
         # Upload Group 1
-        & "$mega\mega-login.bat" halallazure@gmail.com 123456seven
-        & "$mega\mega-rm.bat" -r /RDP_Backups/Part1
-        & "$mega\mega-mkdir.bat" -p /RDP_Backups/Part1
-        & "$mega\mega-put.bat" "C:\Backup1\*" /RDP_Backups/Part1/
-        & "$mega\mega-logout.bat"
+        & $mega login halallazure@gmail.com 123456seven
+        & $mega rm -r /RDP_Backups/Part1
+        & $mega mkdir -p /RDP_Backups/Part1
+        & $mega put "C:\Backup1\*" /RDP_Backups/Part1/
+        & $mega logout
 
         # Upload Group 2
-        & "$mega\mega-login.bat" halallyeager@gmail.com 123456seven
-        & "$mega\mega-rm.bat" -r /RDP_Backups/Part2
-        & "$mega\mega-mkdir.bat" -p /RDP_Backups/Part2
-        & "$mega\mega-put.bat" "C:\Backup2\*" /RDP_Backups/Part2/
+        & $mega login halallyeager@gmail.com 123456seven
+        & $mega rm -r /RDP_Backups/Part2
+        & $mega mkdir -p /RDP_Backups/Part2
+        & $mega put "C:\Backup2\*" /RDP_Backups/Part2/
       shell: pwsh
