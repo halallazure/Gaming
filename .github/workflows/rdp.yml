@@ -1,32 +1,28 @@
-name: AnyDesk-MEGA-Path-Corrected
+name: AnyDesk-40GB-Dual-Sync-Fixed
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Path Fix)
+    - name: 0. Fast Restore (The Correct Way)
       continue-on-error: true
       run: |
-        # 1. Download MEGA-CMD Installer
-        curl.exe -L -o megacmd_setup.exe https://mega.nz/megacmd/MEGAsyncSetup.exe
+        # 1. Install MEGA-CMD using the built-in package manager (Standard for Server OS)
+        choco install megacmd -y --no-progress
         
-        # 2. Verify file exists and then Install Silently
-        if (Test-Path "megacmd_setup.exe") {
-            Start-Process ".\megacmd_setup.exe" -ArgumentList "/S" -Wait
-        }
+        # 2. Define the exact path where Choco installs it
+        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         
-        Start-Sleep -Seconds 20
-        
-        # 3. Locate the Executable
-        $mega = "C:\Users\runneradmin\AppData\Local\MEGAcmd\mega-exec.exe"
-        if (!(Test-Path $mega)) { $mega = "C:\Program Files (x86)\MEGAcmd\mega-exec.exe" }
-        
-        # 4. Restore files from halallazure@gmail.com
+        # 3. Restore files if MEGA installed correctly
         if (Test-Path $mega) {
             New-Item -Path "C:\Restore" -ItemType Directory -Force
             & $mega login halallazure@gmail.com 123456seven
-            & $mega get /RDP_Backups/Latest/* C:\Restore\
+            & $mega get /RDP_Backups/Part1/* C:\Restore\
+            & $mega logout
+            
+            & $mega login halallyeager@gmail.com 123456seven
+            & $mega get /RDP_Backups/Part2/* C:\Restore\
             & $mega logout
         }
       shell: pwsh
@@ -70,17 +66,33 @@ jobs:
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE (Always Saves)
+    - name: 5. TOTAL SAVE (Split Sync)
       if: always()
       run: |
-        $mega = "C:\Users\runneradmin\AppData\Local\MEGAcmd\mega-exec.exe"
-        if (!(Test-Path $mega)) { $mega = "C:\Program Files (x86)\MEGAcmd\mega-exec.exe" }
-        
+        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         if (Test-Path $mega) {
             reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+            
+            $items = Get-ChildItem -Path "$HOME\Desktop\*"
+            $half = [Math]::Ceiling($items.Count / 2)
+            $group1 = $items | Select-Object -First $half
+            $group2 = $items | Select-Object -Last ($items.Count - $half)
+
+            New-Item -Path "C:\Backup1" -ItemType Directory -Force
+            New-Item -Path "C:\Backup2" -ItemType Directory -Force
+            if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
+            if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
+
+            # Upload to both 20GB accounts
             & $mega login halallazure@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Latest
-            & $mega mkdir -p /RDP_Backups/Latest
-            & $mega put "$HOME\Desktop\*" /RDP_Backups/Latest/
+            & $mega rm -r /RDP_Backups/Part1
+            & $mega mkdir -p /RDP_Backups/Part1
+            & $mega put "C:\Backup1\*" /RDP_Backups/Part1/
+            & $mega logout
+
+            & $mega login halallyeager@gmail.com 123456seven
+            & $mega rm -r /RDP_Backups/Part2
+            & $mega mkdir -p /RDP_Backups/Part2
+            & $mega put "C:\Backup2\*" /RDP_Backups/Part2/
         }
       shell: pwsh
