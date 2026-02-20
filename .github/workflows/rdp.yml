@@ -1,60 +1,52 @@
-name: AnyDesk-16GB-Gaming-Sync
+name: AnyDesk-40GB-Dual-Sync
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (The Final Fix)
-      uses: dawidd6/action-download-artifact@v3
-      continue-on-error: true 
-      with:
-        name: My-RDP-Backup
-        path: C:\Restore
-        # MUST match your filename exactly
-        workflow: rdp.yml 
-        # NEW: These lines allow the script to see "Cancelled" backups
-        search_artifacts: true
-        workflow_conclusion: "" 
-        check_artifacts: true
+    - name: 0. Fast Restore (Pulling from 40GB Cloud)
+      continue-on-error: true
+      run: |
+        # Install MEGA Tools
+        curl.exe -L -o megacmd.exe https://mega.nz/megacmd/MEGAsyncSetup.exe
+        Start-Process ./megacmd.exe -ArgumentList "/S" -Wait
+        $env:PATH += ";C:\AppData\Local\MEGAcmd"
+        New-Item -Path "C:\Restore" -ItemType Directory -Force
+        
+        # Login and Pull from Account 1
+        mega-login halallazure@gmail.com 123456seven
+        mega-get /RDP_Backups/Part1/* C:\Restore\
+        mega-logout
+        
+        # Login and Pull from Account 2
+        mega-login halallyeager@gmail.com 123456seven
+        mega-get /RDP_Backups/Part2/* C:\Restore\
+        mega-logout
+      shell: pwsh
 
-    - name: 1. Install & Setup AnyDesk
+    - name: 1. Setup AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        
-        Write-Host "Waiting for AnyDesk to install..." -ForegroundColor Cyan
-        $count = 0
-        while (!(Test-Path "C:\AnyDesk\AnyDesk.exe") -and $count -lt 30) {
-            Start-Sleep -Seconds 2
-            $count++
-        }
-
-        if (Test-Path "C:\AnyDesk\AnyDesk.exe") {
-            echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-            Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
-            Start-Sleep -Seconds 10
-        } else {
-            exit 1
-        }
+        Start-Sleep -Seconds 5
+        echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+        Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
       shell: pwsh
 
-    - name: 2. Major Persistence & Performance
+    - name: 2. Inject Wallpaper, Settings & Folders
       run: |
-        # Restore Registry (Wallpaper/Settings)
+        # Restore Registry Settings (Wallpaper/Themes)
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-        
-        # Restore Desktop Files (Your Folders)
+        # Restore all Desktop folders and files
         if (Test-Path "C:\Restore\*") { 
             Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
-
-        # Instant 4GB space gain
         powercfg -h off
-        Write-Host "System Enhanced Successfully!" -ForegroundColor Green
+        Write-Host "Sync Complete: Desktop Restored!" -ForegroundColor Green
       shell: pwsh
 
     - name: 3. THE REVEAL
@@ -66,27 +58,43 @@ jobs:
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive (6-Hour Session)
+    - name: 4. Keep Alive (6-Hour Active Session)
       run: |
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. Auto-Backup (Always Saves Changes)
-      if: always() # Save even if cancelled
-      run: |
-        New-Item -Path "C:\Backup" -ItemType Directory -Force
-        # Saves your background
-        reg export "HKCU\Control Panel\Desktop" "C:\Backup\WindowsSettings.reg" /y
-        # Saves all Desktop folders
-        Copy-Item -Path "$HOME\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
-      shell: pwsh
-
-    - name: 6. Secure Upload to GitHub
+    - name: 5. TOTAL SAVE (Split Sync to 2 Accounts)
       if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: My-RDP-Backup
-        path: C:\Backup
-        retention-days: 7
+      run: |
+        $env:PATH += ";C:\AppData\Local\MEGAcmd"
+        # Export settings before backup
+        reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+        
+        # Get all desktop items and split them
+        $items = Get-ChildItem -Path "$HOME\Desktop\*"
+        $half = [Math]::Ceiling($items.Count / 2)
+        $group1 = $items | Select-Object -First $half
+        $group2 = $items | Select-Object -Last ($items.Count - $half)
+
+        # Create temporary upload buffers
+        New-Item -Path "C:\Backup1" -ItemType Directory -Force
+        New-Item -Path "C:\Backup2" -ItemType Directory -Force
+        if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
+        if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
+
+        # Upload Group 1 to Account 1
+        mega-login halallazure@gmail.com 123456seven
+        mega-rm -r /RDP_Backups/Part1
+        mega-mkdir /RDP_Backups/Part1
+        mega-put "C:\Backup1\*" /RDP_Backups/Part1/
+        mega-logout
+
+        # Upload Group 2 to Account 2
+        mega-login halallyeager@gmail.com 123456seven
+        mega-rm -r /RDP_Backups/Part2
+        mega-mkdir /RDP_Backups/Part2
+        mega-put "C:\Backup2\*" /RDP_Backups/Part2/
+        Write-Host "All changes saved across both accounts!" -ForegroundColor Green
+      shell: pwsh
