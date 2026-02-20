@@ -5,24 +5,25 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (The Data Fix)
+    - name: 0. Fast Restore (The Final Fix)
       uses: dawidd6/action-download-artifact@v3
       continue-on-error: true 
       with:
         name: My-RDP-Backup
         path: C:\Restore
-        # FIXED: Matches your new filename to ensure folders are recovered
+        # MUST match your filename exactly
         workflow: rdp.yml 
-        # NEW: Searches all previous runs to find your last saved folder
-        search_artifacts: true 
+        # NEW: These lines allow the script to see "Cancelled" backups
+        search_artifacts: true
+        workflow_conclusion: "" 
+        check_artifacts: true
 
     - name: 1. Install & Setup AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         
-        # FIXED: Verification loop to prevent "not recognized" errors
-        Write-Host "Waiting for AnyDesk installation..." -ForegroundColor Cyan
+        Write-Host "Waiting for AnyDesk to install..." -ForegroundColor Cyan
         $count = 0
         while (!(Test-Path "C:\AnyDesk\AnyDesk.exe") -and $count -lt 30) {
             Start-Sleep -Seconds 2
@@ -40,18 +41,18 @@ jobs:
 
     - name: 2. Major Persistence & Performance
       run: |
-        # ENHANCEMENT: Automatic Wallpaper & UI Injection
+        # Restore Registry (Wallpaper/Settings)
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
         
-        # ENHANCEMENT: Recovery of Desktop Folders
+        # Restore Desktop Files (Your Folders)
         if (Test-Path "C:\Restore\*") { 
             Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
 
-        # ENHANCEMENT: Instant 4GB space gain
+        # Instant 4GB space gain
         powercfg -h off
         Write-Host "System Enhanced Successfully!" -ForegroundColor Green
       shell: pwsh
@@ -73,12 +74,12 @@ jobs:
       shell: pwsh
 
     - name: 5. Auto-Backup (Always Saves Changes)
-      if: always() # CRUCIAL: Saves your work even if you click cancel
+      if: always() # Save even if cancelled
       run: |
         New-Item -Path "C:\Backup" -ItemType Directory -Force
-        # Saves UI and Wallpaper
+        # Saves your background
         reg export "HKCU\Control Panel\Desktop" "C:\Backup\WindowsSettings.reg" /y
-        # Saves all your Desktop folders and files
+        # Saves all Desktop folders
         Copy-Item -Path "$HOME\Desktop\*" -Destination "C:\Backup" -Recurse -ErrorAction SilentlyContinue
       shell: pwsh
 
