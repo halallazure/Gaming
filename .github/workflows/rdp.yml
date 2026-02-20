@@ -1,21 +1,17 @@
-name: AnyDesk-40GB-Dual-Sync-Fixed
+name: AnyDesk-40GB-Dual-Sync-FinalFix
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Pulling from 40GB Cloud)
+    - name: 0. Fast Restore (Using Chocolatey)
       continue-on-error: true
       run: |
-        # Fixed Download Link for MEGA CMD
-        curl.exe -L -o megasetup.exe https://mega.nz/megacmd/MEGAsyncSetup.exe
+        # Use Chocolatey to install MEGA-CMD correctly for this OS
+        choco install megacmd -y
+        $env:PATH += ";C:\Program Files\MEGAcmd"
         
-        # Install with specific parameters for GitHub Runners
-        Start-Process ./megasetup.exe -ArgumentList "/S" -Wait
-        
-        # Set Path so the runner can see the 'mega-' commands
-        $env:PATH += ";C:\AppData\Local\MEGAcmd;C:\Program Files\MEGAcmd"
         New-Item -Path "C:\Restore" -ItemType Directory -Force
         
         # Login and Pull from Account 1
@@ -38,19 +34,16 @@ jobs:
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
       shell: pwsh
 
-    - name: 2. Inject Wallpaper, Settings & Folders
+    - name: 2. Restore Desktop Content
       run: |
-        # Apply Registry Settings (Wallpaper/Themes)
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-        # Restore all Desktop folders and files
         if (Test-Path "C:\Restore\*") { 
             Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
         }
         powercfg -h off
-        Write-Host "Sync Complete: Desktop Restored!" -ForegroundColor Green
       shell: pwsh
 
     - name: 3. THE REVEAL
@@ -62,43 +55,37 @@ jobs:
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 4. Keep Alive (6-Hour Active Session)
+    - name: 4. Keep Alive
       run: |
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
       shell: pwsh
 
-    - name: 5. TOTAL SAVE (Split Sync to 2 Accounts)
+    - name: 5. TOTAL SAVE (Dual Account Sync)
       if: always()
       run: |
-        $env:PATH += ";C:\AppData\Local\MEGAcmd;C:\Program Files\MEGAcmd"
-        # Export settings before backup
+        $env:PATH += ";C:\Program Files\MEGAcmd"
         reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
         
-        # Get all desktop items and split them
         $items = Get-ChildItem -Path "$HOME\Desktop\*"
         $half = [Math]::Ceiling($items.Count / 2)
         $group1 = $items | Select-Object -First $half
         $group2 = $items | Select-Object -Last ($items.Count - $half)
 
-        # Create temporary upload buffers
         New-Item -Path "C:\Backup1" -ItemType Directory -Force
         New-Item -Path "C:\Backup2" -ItemType Directory -Force
         if ($group1) { $group1 | Copy-Item -Destination "C:\Backup1" -Recurse }
         if ($group2) { $group2 | Copy-Item -Destination "C:\Backup2" -Recurse }
 
-        # Upload Group 1 to Account 1
         mega-login halallazure@gmail.com 123456seven
         mega-rm -r /RDP_Backups/Part1
         mega-mkdir /RDP_Backups/Part1
         mega-put "C:\Backup1\*" /RDP_Backups/Part1/
         mega-logout
 
-        # Upload Group 2 to Account 2
         mega-login halallyeager@gmail.com 123456seven
         mega-rm -r /RDP_Backups/Part2
         mega-mkdir /RDP_Backups/Part2
         mega-put "C:\Backup2\*" /RDP_Backups/Part2/
-        Write-Host "All changes saved across both accounts!" -ForegroundColor Green
       shell: pwsh
