@@ -1,68 +1,71 @@
-name: AnyDesk-30GB-Persistent
+name: AnyDesk-30GB-Ultimate-Persistence
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Download VHD
+    - name: 1. Download Previous Session Disk
       continue-on-error: true
       uses: actions/download-artifact@v4
       with:
         name: persistent-vhd
         path: C:\
 
-    - name: 2. Mount and Setup
+    - name: 2. Mount 30GB Drive D:
       shell: pwsh
       run: |
         if (!(Test-Path "C:\WorkData.vhd")) {
-          $vhdScript = @"
-        create vdisk file="C:\WorkData.vhd" maximum=30720 type=expandable
-        attach vdisk
-        create partition primary
-        format fs=ntfs quick label="WorkData"
-        assign letter=D
-        "@
+          $vhdScript = "create vdisk file='C:\WorkData.vhd' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='WorkData'`nassign letter=D"
           $vhdScript | diskpart
         } else {
-          "attach vdisk file=`"C:\WorkData.vhd`"" | diskpart
+          "select vdisk file='C:\WorkData.vhd'`nattach vdisk" | diskpart
         }
+        
+        # Setup AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
 
-    - name: 3. Desktop Link and ID
+    - name: 3. Restore Wallpaper & Show ID
       shell: pwsh
       run: |
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\SAVE_HERE_D.lnk")
         $Shortcut.TargetPath = "D:\"
         $Shortcut.Save()
+
+        # Restore settings from the D: Drive if they exist
         if (Test-Path "D:\WindowsSettings.reg") { 
           reg import "D:\WindowsSettings.reg"
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 4. Active Session
+        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        Write-Host "------------------------------------------------"
+        Write-Host "      ID: $ID | Password: GitHub@2026"
+        Write-Host "------------------------------------------------"
+
+    - name: 4. Timer (Session Active)
       shell: pwsh
       run: |
         $timeout = New-TimeSpan -Hours 5 -Minutes 40
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 5. Save and Cleanup
+    - name: 5. Critical Save Phase (DO NOT CANCEL EARLY)
       if: always()
       shell: pwsh
       run: |
+        # Save wallpaper and desktop settings to D: Drive
         reg export "HKCU\Control Panel\Desktop" "D:\WindowsSettings.reg" /y
-        Remove-Item -Path "D:\$RECYCLE.BIN\*" -Recurse -Force -ErrorAction SilentlyContinue
-        "detach vdisk file=`"C:\WorkData.vhd`"" | diskpart
+        
+        # Safely detach the disk so GitHub can grab it
+        "select vdisk file='C:\WorkData.vhd'`ndetach vdisk" | diskpart
 
-    - name: 6. Final Sync
+    - name: 6. Final Upload to GitHub Storage
       if: always()
       uses: actions/upload-artifact@v4
       with:
