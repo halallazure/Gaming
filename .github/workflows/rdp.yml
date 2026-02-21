@@ -1,4 +1,4 @@
-name: AnyDesk-30GB-Permanent-S
+name: AnyDesk-30GB-Data-Flush
 on: workflow_dispatch
 
 jobs:
@@ -50,11 +50,16 @@ jobs:
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 5. Save and Detach
+    - name: 5. Forced Save and Wait
       if: always()
       shell: pwsh
       run: |
         reg export "HKCU\Control Panel\Desktop" "S:\WindowsSettings.reg" /y
+        Write-Output "Flushing data to Drive S... Please wait."
+        # This forces the image and folders to be written to the disk file
+        $drive = Get-WmiObject Win32_Volume -Filter "DriveLetter='S:'"
+        $drive.FlushBuffers()
+        Start-Sleep -Seconds 30
         "select vdisk file='C:\Users\runneradmin\Documents\WorkData.vhd'`ndetach vdisk" | diskpart
 
     - name: 6. Final Sync
