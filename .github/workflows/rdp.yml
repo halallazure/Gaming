@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V2
+name: Ultimate-Gaming-VM-V3
 on: workflow_dispatch
 
 jobs:
@@ -7,57 +7,63 @@ jobs:
     steps:
     - name: 1. Graphics & FPS Booster
       run: |
-        # Force High Performance Mode
         powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-        # Disable Aero glass and animations for max FPS
         reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f
         reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
         Stop-Service -Name "SysMain" -Force
 
-    - name: 2. Mount Storage & Install Mega
+    - name: 2. Install Storage & MEGA
       shell: pwsh
       run: |
+        # Create Disk
         $vhdPath = "C:\GamingDisk.vhd"
         "create vdisk file='$vhdPath' maximum=30720 type=expandable", "attach vdisk", "create partition primary", "format fs=ntfs quick label='Gaming'", "assign letter=S" | diskpart
+        # Install MEGAcmd
         curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
         Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
+        Start-Sleep -Seconds 10
 
-    - name: 3. Cloud Login & Live Sync
+    - name: 3. Cloud Login & Sync
       shell: pwsh
       env:
         M_USER: ${{ secrets.MEGA_EMAIL }}
         M_PASS: ${{ secrets.MEGA_PASSWORD }}
       run: |
-        $env:PATH += ";C:\AppData\Local\MEGAcmd"
-        mega-login "$env:M_USER" "$env:M_PASS"
-        # Mirror S: drive to Mega. Every file you drop in S: saves instantly.
-        mega-sync S:\ /GamingVM
+        # Use Absolute Paths to avoid 'not recognized' error
+        $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
+        
+        # Start the MEGA server in the background first
+        Start-Process "$megaDir\MEGAcmdServer.exe" -WindowStyle Hidden
         Start-Sleep -Seconds 10
+        
+        # Login using absolute path
+        & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+        
+        # Start the Sync
+        & "$megaDir\mega-sync.bat" S:\ /GamingVM
+        Write-Host "Sync established with Mega.nz"
 
-    - name: 4. Restore Wallpaper Engine & Rainmeter
+    - name: 4. AnyDesk & Restore Settings
       shell: pwsh
       run: |
-        # Restore settings from your Mega Cloud
-        if (Test-Path "S:\Backup\System.reg") { reg import "S:\Backup\System.reg" }
-        if (Test-Path "S:\Backup\Rainmeter.reg") { reg import "S:\Backup\Rainmeter.reg" }
-        RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-        
-        # AnyDesk Setup
+        # AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
+        # Restore Registry from S: (which is now synced to Mega)
+        if (Test-Path "S:\Backup\System.reg") { reg import "S:\Backup\System.reg" }
+        RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+        
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 5. Gaming Session (Auto-Backup Every 60s)
+    - name: 5. Active Session
       shell: pwsh
       run: |
         while ($true) { 
           if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
-          # Save your visual changes to the cloud automatically
           reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-          reg export "HKCU\Software\Rainmeter" "S:\Backup\Rainmeter.reg" /y
           Start-Sleep -Seconds 60 
         }
