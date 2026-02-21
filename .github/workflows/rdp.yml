@@ -1,28 +1,20 @@
-name: Ultimate-Gaming-VM-V22
+name: Ultimate-Gaming-VM-V23
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Setup S Drive
+      - name: 1. Install Mega and AnyDesk
         run: |
-          echo create vdisk file='C:\disk.vhd' maximum=30720 type=expandable > ds
-          echo attach vdisk >> ds
-          echo create partition primary >> ds
-          echo format fs=ntfs quick label='Gaming' >> ds
-          echo assign letter=S >> ds
-          diskpart /s ds
-          mkdir S:\Backup
-
-      - name: 2. Install Mega and AnyDesk
-        run: |
+          mkdir C:\GamingVM
+          mkdir C:\GamingVM\Backup
           curl -L -o m.exe https://mega.nz/MEGAcmdSetup64.exe
           start /wait m.exe /S
           curl -L -o a.exe https://download.anydesk.com/AnyDesk.exe
           ./a.exe --install C:\AnyDesk --start-with-win --silent
 
-      - name: 3. Login and Restore
+      - name: 2. Login and Restore Data
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -32,24 +24,33 @@ jobs:
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 20
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          & "$m\mega-mkdir.bat" /GamingVM
-          & "$m\mega-get.bat" /GamingVM S:\
+          & "$m\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
+          & "$m\mega-get.bat" /GamingVM C:\GamingVM
 
-      - name: 4. Start AnyDesk and Show ID
+      - name: 3. Start AnyDesk and Wait for ID
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          Start-Sleep -Seconds 30
-          $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+          Write-Host "Waiting for AnyDesk ID to generate..."
+          $idFile = "C:\ProgramData\AnyDesk\system.conf"
+          while (!(Test-Path $idFile)) { Start-Sleep -Seconds 2 }
+          $ID = ""
+          while (!$ID) {
+              $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+              if (!$ID) { Start-Sleep -Seconds 2 }
+          }
+          Write-Host "==========================================="
           Write-Host "ANYDESK_ID: $ID"
+          Write-Host "PASSWORD: GitHub@2026"
+          Write-Host "==========================================="
+          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 5. Permanent Background Save
+      - name: 4. Permanent Background Sync
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-            & "$m\mega-put.bat" S:\Backup /GamingVM/
-            & "$m\mega-put.bat" S:\WallpaperEngine /GamingVM/
+            reg export "HKCU\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
+            & "$m\mega-put.bat" -c C:\GamingVM\* /GamingVM/
             Start-Sleep -Seconds 60
           }
