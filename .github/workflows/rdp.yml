@@ -1,17 +1,18 @@
-name: Ultimate-Gaming-VM-V7
+name: Ultimate-Gaming-VM-V12
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Graphics & FPS Booster
+    - name: 1. High-Performance Graphics Setup
       run: |
         powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-        reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f
         reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+        # Optimize AnyDesk for Graphics
+        reg add "HKCU\Software\AnyDesk\Global" /v "ViewMode" /t REG_DWORD /d 1 /f
 
-    - name: 2. Setup Storage & MEGA
+    - name: 2. Create 30GB Persistence Drive
       shell: pwsh
       run: |
         $vhdPath = "C:\GamingDisk.vhd"
@@ -19,7 +20,7 @@ jobs:
         curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
         Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
 
-    - name: 3. Login & Cloud Sync (Forced Success)
+    - name: 3. Cloud Login & Restore Session
       shell: pwsh
       env:
         M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -28,18 +29,15 @@ jobs:
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
         Start-Process "$megaDir\MEGAcmdServer.exe" -WindowStyle Hidden
         Start-Sleep -Seconds 15
-        
-        # Login
         & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
         Start-Sleep -Seconds 5
         
-        # We use '|| $true' or '$?' to tell GitHub to ignore the Mega error codes
+        # Pull data from Mega to S: drive
         & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
-        & "$megaDir\mega-get.bat" /GamingVM/* S:\ 2>$null; $global:LASTEXITCODE = 0
-        
-        Write-Host "Cloud storage linked. Moving to AnyDesk..."
+        Write-Host "Downloading your previous session settings..."
+        & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
 
-    - name: 4. AnyDesk & Environment Restore
+    - name: 4. AnyDesk & Auto-Appearance Refresh
       shell: pwsh
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
@@ -47,28 +45,37 @@ jobs:
         Start-Sleep -Seconds 8
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Apply settings if they exist on the cloud-synced S: drive
+        # Restore Registry (Wallpaper, Icons, Theme)
         if (Test-Path "S:\Backup\System.reg") { 
-          reg import "S:\Backup\System.reg"
-          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+            reg import "S:\Backup\System.reg" 
+            RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-        
-        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "==========================================="
-        Write-Host "YOUR ANYDESK ID: $ID"
-        Write-Host "YOUR PASSWORD: GitHub@2026"
-        Write-Host "==========================================="
 
-    - name: 5. Live Gaming & Background Cloud Save
+        # CREATE THE "FORCE SAVE" DESKTOP SHORTCUT
+        $DesktopPath = [Environment]::GetFolderPath("Desktop")
+        $SaveScript = @"
+        `$megaDir = `"`$env:LOCALAPPDATA\MEGAcmd`"
+        reg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y
+        & `"`$megaDir\mega-put.bat`" S:\* /GamingVM/
+        msg * `"SUCCESS: Your changes are now safe in Mega Cloud. You can close the VM.`"
+"@
+        $SaveScript | Out-File -FilePath "C:\ForceSave.ps1"
+        $s = (New-Object -ComObject WScript.Shell).CreateShortcut("$DesktopPath\SAVE_MY_PROGRESS.lnk")
+        $s.TargetPath = "powershell.exe"
+        $s.Arguments = "-ExecutionPolicy Bypass -File C:\ForceSave.ps1"
+        $s.IconLocation = "shell32.dll,258"
+        $s.Save()
+
+        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        Write-Host "ID: $ID | Password: GitHub@2026"
+
+    - name: 5. Background Auto-Save (Every 120s)
       shell: pwsh
       run: |
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
         while ($true) {
           if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
           reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-          
-          # Force upload every 3 mins, ignoring errors
           & "$megaDir\mega-put.bat" S:\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
-          
-          Start-Sleep -Seconds 180
+          Start-Sleep -Seconds 120
         }
