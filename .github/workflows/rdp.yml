@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V4
+name: Ultimate-Gaming-VM-Stable
 on: workflow_dispatch
 
 jobs:
@@ -10,18 +10,16 @@ jobs:
         powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
         reg add "HKCU\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f
         reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
-        Stop-Service -Name "SysMain" -Force
 
-    - name: 2. Install Storage & MEGA
+    - name: 2. Setup Storage & MEGA
       shell: pwsh
       run: |
         $vhdPath = "C:\GamingDisk.vhd"
         "create vdisk file='$vhdPath' maximum=30720 type=expandable", "attach vdisk", "create partition primary", "format fs=ntfs quick label='Gaming'", "assign letter=S" | diskpart
         curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
         Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
-        Start-Sleep -Seconds 10
 
-    - name: 3. Cloud Login & Sync
+    - name: 3. Login & Pull Existing Data
       shell: pwsh
       env:
         M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -29,20 +27,14 @@ jobs:
       run: |
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
         Start-Process "$megaDir\MEGAcmdServer.exe" -WindowStyle Hidden
-        Start-Sleep -Seconds 10
-        
-        # Login
+        Start-Sleep -Seconds 15
         & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
         Start-Sleep -Seconds 5
-        
-        # FIXED: Ensure the Mega folder exists first to avoid "Sync not found"
-        & "$megaDir\mega-mkdir.bat" /GamingVM
-        
-        # FIXED: Simplified path for sync
-        & "$megaDir\mega-sync.bat" S: /GamingVM
-        Write-Host "Sync established with Mega.nz"
+        # Download your saved data from Mega to S: drive
+        & "$megaDir\mega-get.bat" /GamingVM/* S:\
+        Write-Host "Data Restored from Cloud"
 
-    - name: 4. AnyDesk & Restore Settings
+    - name: 4. AnyDesk & Auto-Restore
       shell: pwsh
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
@@ -50,19 +42,29 @@ jobs:
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Restore Registry
         if (Test-Path "S:\Backup\System.reg") { reg import "S:\Backup\System.reg" }
         RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 5. Active Session
+    - name: 5. Gaming Session & Hard Save
       shell: pwsh
+      env:
+        M_USER: ${{ secrets.MEGA_EMAIL }}
+        M_PASS: ${{ secrets.MEGA_PASSWORD }}
       run: |
-        # Loop forever until you manually stop the session
-        while ($true) { 
+        $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
+        # Run for 6 hours
+        $timeout = New-TimeSpan -Hours 5 -Minutes 50
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        
+        while ($stopwatch.Elapsed -lt $timeout) {
+          # Every 5 minutes, force an upload of your settings to Mega
           if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
           reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-          Start-Sleep -Seconds 60 
+          
+          # Use 'mega-put' to force upload to your cloud account
+          & "$megaDir\mega-put.bat" S:\Backup\System.reg /GamingVM/Backup/
+          Start-Sleep -Seconds 300
         }
