@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V17
+name: Ultimate-Gaming-VM-V18
 on: workflow_dispatch
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
 
-      - name: 2. Setup Gaming Drive S
+      - name: 2. Create Gaming Drive S
         shell: pwsh
         run: |
           $vhdPath = "C:\GamingDisk.vhd"
@@ -32,22 +32,36 @@ jobs:
           & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
           & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
 
-      - name: 4. AnyDesk and Fixed Instant Save
+      - name: 4. AnyDesk (ID Fix) and Instant Save
         shell: pwsh
         run: |
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-          Start-Sleep -Seconds 8
+          Start-Sleep -Seconds 15
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+          
           if (Test-Path "S:\Backup\System.reg") { 
               reg import "S:\Backup\System.reg" 
               RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
           }
+
+          # Create Save Button with standard pathing to avoid \\?\ error
           $DesktopPath = [Environment]::GetFolderPath("Desktop")
-          # FIXED COMMAND: Removed the * and added standard pathing to avoid \\?\ error
-          "@echo off`nset megaDir=%LOCALAPPDATA%\MEGAcmd`nreg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y`ncall `"%megaDir%\mega-put.bat`" S:\ /GamingVM/`necho SAVE COMPLETE! YOU CAN CLOSE NOW.`npause" | Out-File -FilePath "$DesktopPath\INSTANT_SAVE.bat" -Encoding ascii
-          $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-          Write-Host "ANYDESK ID: $ID | Password: GitHub@2026"
+          "@echo off`nset megaDir=%LOCALAPPDATA%\MEGAcmd`nreg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y`ncall `"%megaDir%\mega-put.bat`" S:\Backup /GamingVM/`ncall `"%megaDir%\mega-put.bat`" S:\ /GamingVM/`necho SAVE COMPLETE! YOU CAN CLOSE NOW.`npause" | Out-File -FilePath "$DesktopPath\INSTANT_SAVE.bat" -Encoding ascii
+
+          # RETRY LOOP FOR ANYDESK ID
+          Write-Host "Waiting for AnyDesk ID..."
+          for ($i=0; $i -lt 10; $i++) {
+              $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+              if ($ID) {
+                  Write-Host "==========================================="
+                  Write-Host "ANYDESK ID: $ID"
+                  Write-Host "PASSWORD: GitHub@2026"
+                  Write-Host "==========================================="
+                  break
+              }
+              Start-Sleep -Seconds 5
+          }
 
       - name: 5. Background Auto Save
         shell: pwsh
