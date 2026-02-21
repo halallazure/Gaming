@@ -1,4 +1,4 @@
-name: AnyDesk-Final-Dual-Sync
+name: AnyDesk-40GB-Final-Sync
 on: workflow_dispatch
 
 jobs:
@@ -7,6 +7,7 @@ jobs:
     steps:
     - name: 0. Fast Restore
       continue-on-error: true
+      shell: pwsh
       run: |
         choco install megacmd -y --no-progress
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
@@ -22,18 +23,18 @@ jobs:
                 Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force
             }
         }
-      shell: pwsh
 
     - name: 1. Setup AnyDesk
+      shell: pwsh
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 10
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
-      shell: pwsh
 
     - name: 2. Create Manual Save Button
+      shell: pwsh
       run: |
         $ScriptPath = "$HOME\Desktop\SAVE_NOW.ps1"
         $Content = @'
@@ -42,8 +43,10 @@ jobs:
         $items = Get-ChildItem -Path "$HOME\Desktop\*"
         $half = [Math]::Ceiling($items.Count / 2)
         New-Item -Path "C:\B1","C:\B2" -ItemType Directory -Force
-        $items | Select-Object -First $half | Copy-Item -Destination "C:\B1" -Recurse -Force
-        $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\B2" -Recurse -Force
+        if ($items) {
+            $items | Select-Object -First $half | Copy-Item -Destination "C:\B1" -Recurse -Force
+            $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\B2" -Recurse -Force
+        }
         & "$mega" login halallazure@gmail.com 123456seven
         & "$mega" rm -r /RDP_Backups/Part1
         & "$mega" put "C:\B1\*" /RDP_Backups/Part1/
@@ -53,26 +56,28 @@ jobs:
         & "$mega" put "C:\B2\*" /RDP_Backups/Part2/
         & "$mega" logout
         msg * "40GB SYNC COMPLETE!"
-'@
+        '@
         $Content | Out-File -FilePath $ScriptPath -Encoding utf8
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\CLICK_TO_SAVE.lnk")
         $Shortcut.TargetPath = "powershell.exe"
         $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$ScriptPath`""
         $Shortcut.Save()
-      shell: pwsh
 
     - name: 3. Reveal ID & Apply Theme
+      shell: pwsh
       run: |
         if (Test-Path "$HOME\Desktop\WindowsSettings.reg") { 
             reg import "$HOME\Desktop\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        Write-Host "------------------------------------------------"
         Write-Host "ID: $ID | Password: GitHub@2026"
-      shell: pwsh
+        Write-Host "------------------------------------------------"
 
-    - name: 4. Active Timer
+    - name: 4. Session Timer
+      shell: pwsh
       run: |
         $timeout = New-TimeSpan -Hours 5 -Minutes 40
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -80,6 +85,7 @@ jobs:
 
     - name: 5. Auto-Save Safety Net
       if: always()
+      shell: pwsh
       run: |
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         if (Test-Path $mega) {
@@ -87,8 +93,10 @@ jobs:
             $items = Get-ChildItem -Path "$HOME\Desktop\*"
             $half = [Math]::Ceiling($items.Count / 2)
             New-Item -Path "C:\AB1","C:\AB2" -ItemType Directory -Force
-            $items | Select-Object -First $half | Copy-Item -Destination "C:\AB1" -Recurse -Force
-            $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\AB2" -Recurse -Force
+            if ($items) {
+                $items | Select-Object -First $half | Copy-Item -Destination "C:\AB1" -Recurse -Force
+                $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\AB2" -Recurse -Force
+            }
             & $mega login halallazure@gmail.com 123456seven
             & $mega rm -r /RDP_Backups/Part1
             & $mega put "C:\AB1\*" /RDP_Backups/Part1/
@@ -98,4 +106,3 @@ jobs:
             & $mega put "C:\AB2\*" /RDP_Backups/Part2/
             & $mega logout
         }
-      shell: pwsh
