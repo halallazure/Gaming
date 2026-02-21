@@ -1,18 +1,18 @@
-name: AnyDesk-30GB-AutoClean-Sync
+name: AnyDesk-30GB-Persistent
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Download Persistent Disk
+    - name: 1. Download VHD
       continue-on-error: true
       uses: actions/download-artifact@v4
       with:
         name: persistent-vhd
         path: C:\
 
-    - name: 2. Mount Drive D: & Setup AnyDesk
+    - name: 2. Mount and Setup
       shell: pwsh
       run: |
         if (!(Test-Path "C:\WorkData.vhd")) {
@@ -33,7 +33,7 @@ jobs:
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
 
-    - name: 3. Restore Settings & Reveal ID
+    - name: 3. Desktop Link and ID
       shell: pwsh
       run: |
         $WshShell = New-Object -ComObject WScript.Shell
@@ -45,31 +45,24 @@ jobs:
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "------------------------------------------------"
-        Write-Host "      ID: $ID | Password: GitHub@2026"
-        Write-Host "------------------------------------------------"
+        Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 4. Session Timer
+    - name: 4. Active Session
       shell: pwsh
       run: |
         $timeout = New-TimeSpan -Hours 5 -Minutes 40
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 5. Cleanup & Save State
+    - name: 5. Save and Cleanup
       if: always()
       shell: pwsh
       run: |
-        # Export registry to D: drive for persistence
         reg export "HKCU\Control Panel\Desktop" "D:\WindowsSettings.reg" /y
-        
-        # Cleanup temporary junk on Drive D: to save space
         Remove-Item -Path "D:\$RECYCLE.BIN\*" -Recurse -Force -ErrorAction SilentlyContinue
-        
-        # Detach VHD so it can be uploaded
         "detach vdisk file=`"C:\WorkData.vhd`"" | diskpart
 
-    - name: 6. Final Upload to GitHub
+    - name: 6. Final Sync
       if: always()
       uses: actions/upload-artifact@v4
       with:
