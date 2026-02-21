@@ -1,75 +1,55 @@
-name: Ultimate-Gaming-VM-V21
+name: Ultimate-Gaming-VM-V22
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Graphics & Performance
+      - name: 1. Setup S Drive
         run: |
-          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+          echo create vdisk file='C:\disk.vhd' maximum=30720 type=expandable > ds
+          echo attach vdisk >> ds
+          echo create partition primary >> ds
+          echo format fs=ntfs quick label='Gaming' >> ds
+          echo assign letter=S >> ds
+          diskpart /s ds
+          mkdir S:\Backup
 
-      - name: 2. Setup S: Drive & Folders
-        shell: pwsh
+      - name: 2. Install Mega and AnyDesk
         run: |
-          $vhdPath = "C:\GamingDisk.vhd"
-          "create vdisk file='$vhdPath' maximum=30720 type=expandable", "attach vdisk", "create partition primary", "format fs=ntfs quick label='Gaming'", "assign letter=S" | diskpart
-          # Pre-create the Backup folder to prevent sync errors
-          New-Item -Path "S:\Backup" -ItemType Directory -Force
-          curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
-          Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
+          curl -L -o m.exe https://mega.nz/MEGAcmdSetup64.exe
+          start /wait m.exe /S
+          curl -L -o a.exe https://download.anydesk.com/AnyDesk.exe
+          ./a.exe --install C:\AnyDesk --start-with-win --silent
 
-      - name: 3. Cloud Login & Restore
+      - name: 3. Login and Restore
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
-          Start-Process "$megaDir\MEGAcmdServer.exe" -WindowStyle Hidden
+          $m = "${env:LOCALAPPDATA}\MEGAcmd"
+          Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 20
-          & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          Start-Sleep -Seconds 5
-          & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
-          # Download everything into S:
-          & "$megaDir\mega-get.bat" /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
+          & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+          & "$m\mega-mkdir.bat" /GamingVM
+          & "$m\mega-get.bat" /GamingVM S:\
 
-      - name: 4. AnyDesk (Fixed ID Loop)
+      - name: 4. Start AnyDesk and Show ID
         shell: pwsh
         run: |
-          curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-          ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-          Start-Sleep -Seconds 25
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          
-          if (Test-Path "S:\Backup\System.reg") { 
-              reg import "S:\Backup\System.reg" 
-              RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-          }
+          Start-Sleep -Seconds 30
+          $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+          Write-Host "ANYDESK_ID: $ID"
 
-          # NEW ID CAPTURE: Wait up to 60 seconds
-          for ($i=0; $i -lt 12; $i++) {
-              $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-              if ($ID) {
-                  Write-Host "==========================================="
-                  Write-Host "ANYDESK ID: $ID"
-                  Write-Host "PASSWORD: GitHub@2026"
-                  Write-Host "==========================================="
-                  break
-              }
-              Start-Sleep -Seconds 5
-          }
-
-      - name: 5. Background Live Backup
+      - name: 5. Permanent Background Save
         shell: pwsh
         run: |
-          $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
+          $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # 1. Export Registry to S:
             reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-            # 2. Upload only the contents of S: to Mega
-            & "$megaDir\mega-put.bat" S:\Backup /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
-            & "$megaDir\mega-put.bat" S:\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
+            & "$m\mega-put.bat" S:\Backup /GamingVM/
+            & "$m\mega-put.bat" S:\WallpaperEngine /GamingVM/
             Start-Sleep -Seconds 60
           }
