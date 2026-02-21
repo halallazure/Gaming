@@ -1,16 +1,16 @@
-name: Ultimate-Gaming-VM-V13
+name: Ultimate-Gaming-VM-V14
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Graphics & Performance Booster
+      - name: 1. Graphics and FPS Booster
         run: |
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
 
-      - name: 2. Setup 30GB Persistence Drive
+      - name: 2. Create Gaming Drive S
         shell: pwsh
         run: |
           $vhdPath = "C:\GamingDisk.vhd"
@@ -18,7 +18,7 @@ jobs:
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
 
-      - name: 3. Login & Deep Restore
+      - name: 3. Cloud Login and Restore
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -32,7 +32,7 @@ jobs:
           & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
           & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
 
-      - name: 4. AnyDesk & Desktop Setup
+      - name: 4. AnyDesk Connection
         shell: pwsh
         run: |
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
@@ -43,26 +43,13 @@ jobs:
               reg import "S:\Backup\System.reg" 
               RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
           }
-          $DesktopPath = [Environment]::GetFolderPath("Desktop")
-          $SaveScript = @"
-          `$megaDir = `"`$env:LOCALAPPDATA\MEGAcmd`"
-          reg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y
-          & `"`$megaDir\mega-put.bat`" S:\* /GamingVM/
-          msg * `"SUCCESS: Your changes are now safe in Mega Cloud.`"
-"@
-          $SaveScript | Out-File -FilePath "C:\ForceSave.ps1"
-          $s = (New-Object -ComObject WScript.Shell).CreateShortcut("$DesktopPath\SAVE_MY_PROGRESS.lnk")
-          $s.TargetPath = "powershell.exe"
-          $s.Arguments = "-ExecutionPolicy Bypass -File C:\ForceSave.ps1"
-          $s.IconLocation = "shell32.dll,258"
-          $s.Save()
           $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
           Write-Host "==========================================="
           Write-Host "ANYDESK ID: $ID"
           Write-Host "PASSWORD: GitHub@2026"
           Write-Host "==========================================="
 
-      - name: 5. Background Auto-Save
+      - name: 5. Background Auto Save
         shell: pwsh
         run: |
           $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
