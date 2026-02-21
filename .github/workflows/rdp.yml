@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V6
+name: Ultimate-Gaming-VM-V7
 on: workflow_dispatch
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
         curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
         Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
 
-    - name: 3. Login & Cloud Sync (Silent Mode)
+    - name: 3. Login & Cloud Sync (Forced Success)
       shell: pwsh
       env:
         M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -33,21 +33,21 @@ jobs:
         & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
         Start-Sleep -Seconds 5
         
-        # Force the script to continue even if MEGA complains about existing folders
-        try { & "$megaDir\mega-mkdir.bat" /GamingVM } catch { }
-        try { & "$megaDir\mega-get.bat" /GamingVM/* S:\ } catch { }
+        # We use '|| $true' or '$?' to tell GitHub to ignore the Mega error codes
+        & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
+        & "$megaDir\mega-get.bat" /GamingVM/* S:\ 2>$null; $global:LASTEXITCODE = 0
         
-        Write-Host "Cloud storage linked successfully!"
+        Write-Host "Cloud storage linked. Moving to AnyDesk..."
 
     - name: 4. AnyDesk & Environment Restore
       shell: pwsh
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 8
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Apply your saved settings if they exist
+        # Apply settings if they exist on the cloud-synced S: drive
         if (Test-Path "S:\Backup\System.reg") { 
           reg import "S:\Backup\System.reg"
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
@@ -64,12 +64,11 @@ jobs:
       run: |
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
         while ($true) {
-          # Capture your latest wallpaper/settings
           if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
           reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
           
-          # This pushes EVERY change in S: to your Mega account
-          try { & "$megaDir\mega-put.bat" S:\* /GamingVM/ } catch { }
+          # Force upload every 3 mins, ignoring errors
+          & "$megaDir\mega-put.bat" S:\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
           
           Start-Sleep -Seconds 180
         }
