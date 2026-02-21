@@ -1,4 +1,4 @@
-name: AnyDesk-30GB-Persistence-S
+name: AnyDesk-30GB-Permanent-S
 on: workflow_dispatch
 
 jobs:
@@ -10,16 +10,17 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: persistent-vhd
-        path: C:\
+        path: C:\Users\runneradmin\Documents\
 
     - name: 2. Create or Mount Drive S
       shell: pwsh
       run: |
-        if (!(Test-Path "C:\WorkData.vhd")) {
-          $script = "create vdisk file='C:\WorkData.vhd' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Storage'`nassign letter=S"
+        $vhdPath = "C:\Users\runneradmin\Documents\WorkData.vhd"
+        if (!(Test-Path $vhdPath)) {
+          $script = "create vdisk file='$vhdPath' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Storage'`nassign letter=S"
           $script | diskpart
         } else {
-          $script = "select vdisk file='C:\WorkData.vhd'`nattach vdisk`nassign letter=S"
+          $script = "select vdisk file='$vhdPath'`nattach vdisk`nassign letter=S"
           $script | diskpart
         }
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
@@ -54,12 +55,12 @@ jobs:
       shell: pwsh
       run: |
         reg export "HKCU\Control Panel\Desktop" "S:\WindowsSettings.reg" /y
-        "select vdisk file='C:\WorkData.vhd'`ndetach vdisk" | diskpart
+        "select vdisk file='C:\Users\runneradmin\Documents\WorkData.vhd'`ndetach vdisk" | diskpart
 
     - name: 6. Final Sync
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: persistent-vhd
-        path: C:\WorkData.vhd
+        path: C:\Users\runneradmin\Documents\WorkData.vhd
         retention-days: 7
