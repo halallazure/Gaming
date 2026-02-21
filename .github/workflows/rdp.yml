@@ -1,4 +1,4 @@
-name: AnyDesk-30GB-Success-S
+name: AnyDesk-30GB-Permanent-Final
 on: workflow_dispatch
 
 jobs:
@@ -10,12 +10,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: persistent-vhd
-        path: C:\Users\runneradmin\Documents\
+        path: ${{ github.workspace }}
 
     - name: 2. Create or Mount Drive S
       shell: pwsh
       run: |
-        $vhdPath = "C:\Users\runneradmin\Documents\WorkData.vhd"
+        $vhdPath = "${{ github.workspace }}\WorkData.vhd"
         if (!(Test-Path $vhdPath)) {
           $script = "create vdisk file='$vhdPath' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Storage'`nassign letter=S"
           $script | diskpart
@@ -55,15 +55,12 @@ jobs:
       shell: pwsh
       run: |
         reg export "HKCU\Control Panel\Desktop" "S:\WindowsSettings.reg" /y
-        # Use fsutil to force data to write to S:
-        fsutil volume dismount S:
-        Start-Sleep -Seconds 5
-        "select vdisk file='C:\Users\runneradmin\Documents\WorkData.vhd'`ndetach vdisk" | diskpart
+        "select vdisk file='${{ github.workspace }}\WorkData.vhd'`ndetach vdisk" | diskpart
 
     - name: 6. Final Sync
       if: always()
       uses: actions/upload-artifact@v4
       with:
         name: persistent-vhd
-        path: C:\Users\runneradmin\Documents\WorkData.vhd
+        path: ${{ github.workspace }}\WorkData.vhd
         retention-days: 7
