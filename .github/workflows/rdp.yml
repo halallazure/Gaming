@@ -1,97 +1,87 @@
-name: AnyDesk-Ironclad-Blocking-Sync
+name: AnyDesk-VHD-Final-Fixed
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Force Restore (Step-by-Step)
+    - name: 0. Restore Virtual Disk
       continue-on-error: true
       shell: pwsh
       run: |
         choco install megacmd -y --no-progress
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         if (Test-Path $mega) {
-            New-Item -Path "C:\Restore" -ItemType Directory -Force
-            # Pull from Account 1
-            & $mega login halallazure@gmail.com 123456seven
-            & $mega get /RDP_Backups/Part1/* C:\Restore\
+            & $mega login halallazure@gmail.com 123456seven.
+            & $mega get /RDP_Backups/WorkData.vhd C:\WorkData.vhd
             & $mega logout
-            # Pull from Account 2
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega get /RDP_Backups/Part2/* C:\Restore\
-            & $mega logout
-            # Move to Desktop
-            if (Test-Path "C:\Restore\*") {
-                Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force
-            }
         }
 
-    - name: 1. Setup AnyDesk
+    - name: 1. Mount Drive D: & Setup AnyDesk
       shell: pwsh
       run: |
+        if (!(Test-Path "C:\WorkData.vhd")) {
+            $vhdScript = @"
+            create vdisk file="C:\WorkData.vhd" maximum=20000 type=expandable
+            attach vdisk
+            create partition primary
+            format fs=ntfs quick label="WorkData"
+            assign letter=D
+        "@
+            $vhdScript | diskpart
+        } else {
+            "attach vdisk file=`"C:\WorkData.vhd`"" | diskpart
+        }
+        
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
 
-    - name: 2. Apply Theme & Reveal ID
+    - name: 2. ID Reveal & Persistence Shortcut
       shell: pwsh
       run: |
-        # Apply Registry
-        if (Test-Path "$HOME\Desktop\WindowsSettings.reg") { 
-            reg import "$HOME\Desktop\WindowsSettings.reg"
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\SAVE_HERE_D.lnk")
+        $Shortcut.TargetPath = "D:\"
+        $Shortcut.Save()
+
+        if (Test-Path "D:\WindowsSettings.reg") { 
+            reg import "D:\WindowsSettings.reg"
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 3. Session Timer (Early Stop for Safety)
+        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
+        Write-Host "------------------------------------------------"
+        Write-Host "      ID: $ID | Password: GitHub@2026"
+        Write-Host "------------------------------------------------"
+
+    - name: 3. Session Timer
       shell: pwsh
       run: |
-        # Stop at 5h 30m to give plenty of time for 40GB upload
         $timeout = New-TimeSpan -Hours 5 -Minutes 30
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 4. THE BLOCKING SAVE (Will not close until Done)
+    - name: 4. THE BLOCKING SAVE
       if: always()
       shell: pwsh
       run: |
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         if (Test-Path $mega) {
-            reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+            reg export "HKCU\Control Panel\Desktop" "D:\WindowsSettings.reg" /y
+            "detach vdisk file=`"C:\WorkData.vhd`"" | diskpart
             
-            $items = Get-ChildItem -Path "$HOME\Desktop\*"
-            $half = [Math]::Ceiling($items.Count / 2)
-            New-Item -Path "C:\S1","C:\S2" -ItemType Directory -Force
-            if ($items) {
-                $items | Select-Object -First $half | Copy-Item -Destination "C:\S1" -Recurse -Force
-                $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\S2" -Recurse -Force
-            }
-
-            # Upload Account 1 with Blocking Loop
-            & $mega login halallazure@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part1
-            & $mega put "C:\S1\*" /RDP_Backups/Part1/
+            & $mega login halallazure@gmail.com 123456seven.
+            & $mega rm /RDP_Backups/WorkData.vhd
+            & $mega put "C:\WorkData.vhd" /RDP_Backups/
             
-            Write-Host "Waiting for Account 1 Sync..."
             do {
-                $tx = & $mega transfers
-                Start-Sleep -Seconds 5
-            } while ($tx -notlike "*No active transfers*")
-            & $mega logout
-
-            # Upload Account 2 with Blocking Loop
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part2
-            & $mega put "C:\S2\*" /RDP_Backups/Part2/
+                $status = & $mega transfers
+                Write-Host "Syncing to MEGA..."
+                Start-Sleep -Seconds 10
+            } while ($status -notlike "*No active transfers*")
             
-            Write-Host "Waiting for Account 2 Sync..."
-            do {
-                $tx = & $mega transfers
-                Start-Sleep -Seconds 5
-            } while ($tx -notlike "*No active transfers*")
             & $mega logout
         }
