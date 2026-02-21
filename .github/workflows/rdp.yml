@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-Stable
+name: Ultimate-Gaming-VM-V5
 on: workflow_dispatch
 
 jobs:
@@ -19,8 +19,9 @@ jobs:
         curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
         Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
 
-    - name: 3. Login & Pull Existing Data
+    - name: 3. Login & Initial Restore
       shell: pwsh
+      continue-on-error: true # This prevents the "empty folder" error from stopping us
       env:
         M_USER: ${{ secrets.MEGA_EMAIL }}
         M_PASS: ${{ secrets.MEGA_PASSWORD }}
@@ -30,9 +31,11 @@ jobs:
         Start-Sleep -Seconds 15
         & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
         Start-Sleep -Seconds 5
-        # Download your saved data from Mega to S: drive
+        # Ensure the folder exists in your Mega account
+        & "$megaDir\mega-mkdir.bat" /GamingVM
+        # Try to pull data (will just skip if empty)
         & "$megaDir\mega-get.bat" /GamingVM/* S:\
-        Write-Host "Data Restored from Cloud"
+        Write-Host "Ready for first-time setup!"
 
     - name: 4. AnyDesk & Auto-Restore
       shell: pwsh
@@ -42,29 +45,30 @@ jobs:
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        if (Test-Path "S:\Backup\System.reg") { reg import "S:\Backup\System.reg" }
-        RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+        # Load settings if they exist on S:
+        if (Test-Path "S:\Backup\System.reg") { 
+          reg import "S:\Backup\System.reg"
+          RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+        }
         
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "ID: $ID | Password: GitHub@2026"
+        Write-Host "-------------------------------------------"
+        Write-Host "ID: $ID"
+        Write-Host "Password: GitHub@2026"
+        Write-Host "-------------------------------------------"
 
-    - name: 5. Gaming Session & Hard Save
+    - name: 5. Live Session & Background Backup
       shell: pwsh
-      env:
-        M_USER: ${{ secrets.MEGA_EMAIL }}
-        M_PASS: ${{ secrets.MEGA_PASSWORD }}
       run: |
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
-        # Run for 6 hours
-        $timeout = New-TimeSpan -Hours 5 -Minutes 50
-        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
-        
-        while ($stopwatch.Elapsed -lt $timeout) {
-          # Every 5 minutes, force an upload of your settings to Mega
+        while ($true) {
+          # Save Registry to S:
           if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
           reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
           
-          # Use 'mega-put' to force upload to your cloud account
-          & "$megaDir\mega-put.bat" S:\Backup\System.reg /GamingVM/Backup/
-          Start-Sleep -Seconds 300
+          # Upload everything from S: to Mega in the background
+          # This saves your wallpaper, Rainmeter, and apps!
+          & "$megaDir\mega-put.bat" S:\* /GamingVM/
+          
+          Start-Sleep -Seconds 180 # Syncs every 3 minutes
         }
