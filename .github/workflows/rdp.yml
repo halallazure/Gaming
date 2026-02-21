@@ -1,27 +1,23 @@
-name: AnyDesk-40GB-Dual-Sync-V3
+name: AnyDesk-40GB-Deep-Sync
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Enhanced Search)
+    - name: 0. Fast Restore (Themes & Files)
       continue-on-error: true
       run: |
-        # Install MEGA-CMD
         choco install megacmd -y --no-progress
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        
-        # Ensure Restore folder exists
         New-Item -Path "C:\Restore" -ItemType Directory -Force
         
         if (Test-Path $mega) {
-            # Pull from Account 1
+            # Pull from both accounts
             & $mega login halallazure@gmail.com 123456seven
             & $mega get /RDP_Backups/Part1/* C:\Restore\
             & $mega logout
             
-            # Pull from Account 2
             & $mega login halallyeager@gmail.com 123456seven
             & $mega get /RDP_Backups/Part2/* C:\Restore\
             & $mega logout
@@ -37,25 +33,23 @@ jobs:
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
       shell: pwsh
 
-    - name: 2. Force Restore All Settings
+    - name: 2. Apply Theme & Move Files
       run: |
-        # Apply Wallpaper/Settings
+        # 1. Restore the Theme/Wallpaper files
+        $themePath = "$HOME\AppData\Local\Microsoft\Windows\Themes"
+        if (Test-Path "C:\Restore\Themes") {
+            Copy-Item -Path "C:\Restore\Themes\*" -Destination $themePath -Recurse -Force
+        }
+        # 2. Apply Registry and Refresh UI
         if (Test-Path "C:\Restore\WindowsSettings.reg") { 
             reg import "C:\Restore\WindowsSettings.reg"
-            # This forces Windows to refresh the wallpaper immediately
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-        # Copy folders back to Desktop
+        # 3. Restore Desktop Folders
         if (Test-Path "C:\Restore\*") { 
-            Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Recurse -Force 
+            Copy-Item -Path "C:\Restore\*" -Destination "$HOME\Desktop" -Exclude "Themes","WindowsSettings.reg" -Recurse -Force 
         }
         powercfg -h off
-      shell: pwsh
-
-    - name: 3. THE REVEAL
-      run: |
-        $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "ID: $ID | Password: GitHub@2026" -ForegroundColor Green
       shell: pwsh
 
     - name: 4. Keep Alive
@@ -63,41 +57,34 @@ jobs:
         $timeout = New-TimeSpan -Hours 6
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
-      shell: pwsh
 
-    - name: 5. CRITICAL SAVE (Forced Sync)
+    - name: 5. FORCED DEEP SAVE
       if: always()
       run: |
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        if (Test-Path $mega) {
-            # Save Background/Settings
-            reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
-            
-            $items = Get-ChildItem -Path "$HOME\Desktop\*"
-            $half = [Math]::Ceiling($items.Count / 2)
-            $group1 = $items | Select-Object -First $half
-            $group2 = $items | Select-Object -Last ($items.Count - $half)
+        # Export Settings and Theme Folder
+        reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+        New-Item -Path "$HOME\Desktop\Themes" -ItemType Directory -Force
+        Copy-Item -Path "$HOME\AppData\Local\Microsoft\Windows\Themes\*" -Destination "$HOME\Desktop\Themes" -Recurse -Force
 
-            New-Item -Path "C:\Backup1" -ItemType Directory -Force
-            New-Item -Path "C:\Backup2" -ItemType Directory -Force
-            if ($group1) { Copy-Item $group1.FullName -Destination "C:\Backup1" -Recurse -Force }
-            if ($group2) { Copy-Item $group2.FullName -Destination "C:\Backup2" -Recurse -Force }
+        $items = Get-ChildItem -Path "$HOME\Desktop\*"
+        $half = [Math]::Ceiling($items.Count / 2)
+        
+        New-Item -Path "C:\Backup1" -ItemType Directory -Force
+        New-Item -Path "C:\Backup2" -ItemType Directory -Force
+        $items | Select-Object -First $half | Copy-Item -Destination "C:\Backup1" -Recurse
+        $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\Backup2" -Recurse
 
-            # Forced Upload to Account 1
-            & $mega login halallazure@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part1
-            & $mega mkdir -p /RDP_Backups/Part1
-            & $mega put "C:\Backup1\*" /RDP_Backups/Part1/
-            # Extra wait for upload buffer to clear
-            Start-Sleep -Seconds 10 
-            & $mega logout
+        # Upload & Force Sync (Ensures files actually reach MEGA)
+        & $mega login halallazure@gmail.com 123456seven
+        & $mega rm -r /RDP_Backups/Part1
+        & $mega put "C:\Backup1" /RDP_Backups/Part1
+        & $mega sync # This forces the upload to finish before logout
+        & $mega logout
 
-            # Forced Upload to Account 2
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part2
-            & $mega mkdir -p /RDP_Backups/Part2
-            & $mega put "C:\Backup2\*" /RDP_Backups/Part2/
-            Start-Sleep -Seconds 10
-            & $mega logout
-        }
+        & $mega login halallyeager@gmail.com 123456seven
+        & $mega rm -r /RDP_Backups/Part2
+        & $mega put "C:\Backup2" /RDP_Backups/Part2
+        & $mega sync
+        & $mega logout
       shell: pwsh
