@@ -1,66 +1,74 @@
-name: AnyDesk-30GB-Permanent-Final
+name: Gaming-VM-Fixed-Storage
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 1. Download Previous Session
+    - name: 1. Pull Previous Data
       continue-on-error: true
       uses: actions/download-artifact@v4
       with:
-        name: persistent-vhd
+        name: gaming-storage
         path: ${{ github.workspace }}
 
-    - name: 2. Create or Mount Drive S
+    - name: 2. Initialize 15GB Fixed Disk
       shell: pwsh
       run: |
-        $vhdPath = "${{ github.workspace }}\WorkData.vhd"
+        $vhdPath = "${{ github.workspace }}\GamingDisk.vhd"
         if (!(Test-Path $vhdPath)) {
-          $script = "create vdisk file='$vhdPath' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Storage'`nassign letter=S"
+          # 'type=fixed' ensures your data is written instantly
+          $script = "create vdisk file='$vhdPath' maximum=15360 type=fixed`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Gaming'`nassign letter=S"
           $script | diskpart
         } else {
           $script = "select vdisk file='$vhdPath'`nattach vdisk`nassign letter=S"
           $script | diskpart
         }
+        
+        # Performance & AnyDesk Setup
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
 
-    - name: 3. Restore and Reveal ID
+    - name: 3. Restore Environment
       shell: pwsh
       run: |
         $WshShell = New-Object -ComObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\SAVE_HERE_S.lnk")
+        $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\GAMING_STORAGE_S.lnk")
         $Shortcut.TargetPath = "S:\"
         $Shortcut.Save()
-        if (Test-Path "S:\WindowsSettings.reg") { 
-          reg import "S:\WindowsSettings.reg"
+        
+        # Automatically restore wallpaper and Windows settings
+        if (Test-Path "S:\GamingSettings.reg") { 
+          reg import "S:\GamingSettings.reg"
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
+        
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 4. Active Session
+    - name: 4. Gaming Session (Active)
       shell: pwsh
       run: |
         $timeout = New-TimeSpan -Hours 5 -Minutes 40
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 5. Save and Detach
+    - name: 5. Secure Data Lock
       if: always()
       shell: pwsh
       run: |
-        reg export "HKCU\Control Panel\Desktop" "S:\WindowsSettings.reg" /y
-        "select vdisk file='${{ github.workspace }}\WorkData.vhd'`ndetach vdisk" | diskpart
+        # Save current wallpaper/registry state to S:
+        reg export "HKCU\Control Panel\Desktop" "S:\GamingSettings.reg" /y
+        Start-Sleep -Seconds 5
+        "select vdisk file='${{ github.workspace }}\GamingDisk.vhd'`ndetach vdisk" | diskpart
 
-    - name: 6. Final Sync
+    - name: 6. Upload Persistent Storage
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: persistent-vhd
-        path: ${{ github.workspace }}\WorkData.vhd
+        name: gaming-storage
+        path: ${{ github.workspace }}\GamingDisk.vhd
         retention-days: 7
