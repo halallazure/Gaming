@@ -1,22 +1,20 @@
-name: AnyDesk-40GB-Total-Sync
+name: AnyDesk-Final-Dual-Sync
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Fast Restore (Dual Account)
+    - name: 0. Fast Restore
       continue-on-error: true
       run: |
         choco install megacmd -y --no-progress
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
         if (Test-Path $mega) {
             New-Item -Path "C:\Restore" -ItemType Directory -Force
-            # Pull from Account 1
             & $mega login halallazure@gmail.com 123456seven
             & $mega get /RDP_Backups/Part1/* C:\Restore\
             & $mega logout
-            # Pull from Account 2
             & $mega login halallyeager@gmail.com 123456seven
             & $mega get /RDP_Backups/Part2/* C:\Restore\
             & $mega logout
@@ -26,44 +24,45 @@ jobs:
         }
       shell: pwsh
 
-    - name: 1. Setup AnyDesk & Manual Save Button
+    - name: 1. Setup AnyDesk
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 10
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
+      shell: pwsh
 
-        # CREATE THE MANUAL DUAL-SAVE SCRIPT
-        $SaveScript = @"
-        `$mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        reg export "HKCU\Control Panel\Desktop" "`$HOME\Desktop\WindowsSettings.reg" /y
-        `$items = Get-ChildItem -Path "`$HOME\Desktop\*"
-        `$half = [Math]::Ceiling(`$items.Count / 2)
+    - name: 2. Create Manual Save Button
+      run: |
+        $ScriptPath = "$HOME\Desktop\SAVE_NOW.ps1"
+        $Content = @'
+        $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
+        reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
+        $items = Get-ChildItem -Path "$HOME\Desktop\*"
+        $half = [Math]::Ceiling($items.Count / 2)
         New-Item -Path "C:\B1","C:\B2" -ItemType Directory -Force
-        `$items | Select-Object -First `$half | Copy-Item -Destination "C:\B1" -Recurse -Force
-        `$items | Select-Object -Last (`$items.Count - `$half) | Copy-Item -Destination "C:\B2" -Recurse -Force
-
-        & "`$mega" login halallazure@gmail.com 123456seven
-        & "`$mega" rm -r /RDP_Backups/Part1
-        & "`$mega" put "C:\B1\*" /RDP_Backups/Part1/
-        & "`$mega" logout
-
-        & "`$mega" login halallyeager@gmail.com 123456seven
-        & "`$mega" rm -r /RDP_Backups/Part2
-        & "`$mega" put "C:\B2\*" /RDP_Backups/Part2/
-        & "`$mega" logout
+        $items | Select-Object -First $half | Copy-Item -Destination "C:\B1" -Recurse -Force
+        $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\B2" -Recurse -Force
+        & "$mega" login halallazure@gmail.com 123456seven
+        & "$mega" rm -r /RDP_Backups/Part1
+        & "$mega" put "C:\B1\*" /RDP_Backups/Part1/
+        & "$mega" logout
+        & "$mega" login halallyeager@gmail.com 123456seven
+        & "$mega" rm -r /RDP_Backups/Part2
+        & "$mega" put "C:\B2\*" /RDP_Backups/Part2/
+        & "$mega" logout
         msg * "40GB SYNC COMPLETE!"
-"@
-        $SaveScript | Out-File -FilePath "$HOME\Desktop\SAVE_NOW.ps1" -Encoding utf8
+'@
+        $Content | Out-File -FilePath $ScriptPath -Encoding utf8
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\CLICK_TO_SAVE.lnk")
         $Shortcut.TargetPath = "powershell.exe"
-        $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$HOME\Desktop\SAVE_NOW.ps1`""
+        $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$ScriptPath`""
         $Shortcut.Save()
       shell: pwsh
 
-    - name: 2. Reveal ID & Apply Theme
+    - name: 3. Reveal ID & Apply Theme
       run: |
         if (Test-Path "$HOME\Desktop\WindowsSettings.reg") { 
             reg import "$HOME\Desktop\WindowsSettings.reg"
@@ -73,13 +72,13 @@ jobs:
         Write-Host "ID: $ID | Password: GitHub@2026"
       shell: pwsh
 
-    - name: 3. Session Timer
+    - name: 4. Active Timer
       run: |
         $timeout = New-TimeSpan -Hours 5 -Minutes 40
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 4. AUTO-SAVE SAFETY NET (Dual Account)
+    - name: 5. Auto-Save Safety Net
       if: always()
       run: |
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
@@ -90,12 +89,10 @@ jobs:
             New-Item -Path "C:\AB1","C:\AB2" -ItemType Directory -Force
             $items | Select-Object -First $half | Copy-Item -Destination "C:\AB1" -Recurse -Force
             $items | Select-Object -Last ($items.Count - $half) | Copy-Item -Destination "C:\AB2" -Recurse -Force
-
             & $mega login halallazure@gmail.com 123456seven
             & $mega rm -r /RDP_Backups/Part1
             & $mega put "C:\AB1\*" /RDP_Backups/Part1/
             & $mega logout
-
             & $mega login halallyeager@gmail.com 123456seven
             & $mega rm -r /RDP_Backups/Part2
             & $mega put "C:\AB2\*" /RDP_Backups/Part2/
