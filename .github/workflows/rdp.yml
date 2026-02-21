@@ -1,39 +1,35 @@
-name: AnyDesk-SolidState-Sync
+name: AnyDesk-MEGA-Ironclad-Sync
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-    - name: 0. Ultra-Fast Restore
+    - name: 0. Ultra-Restore (Files & Registry)
       continue-on-error: true
       run: |
         choco install megacmd -y --no-progress
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        New-Item -Path "C:\Restore" -ItemType Directory -Force
         
         if (Test-Path $mega) {
-            # Download parts from both accounts
             & $mega login halallazure@gmail.com 123456seven
-            & $mega get /RDP_Backups/Part1/* C:\Restore\
+            # Create a clean folder for the download
+            New-Item -Path "C:\DataDump" -ItemType Directory -Force
+            & $mega get /RDP_Backups/Part1/* C:\DataDump\
             & $mega logout
             
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega get /RDP_Backups/Part2/* C:\Restore\
-            & $mega logout
-            
-            # Unpack everything to Desktop
-            if (Test-Path "C:\Restore\Backup.zip") {
-                Expand-Archive -Path "C:\Restore\Backup.zip" -DestinationPath "$HOME\Desktop" -Force
+            # Move files to Desktop immediately
+            if (Test-Path "C:\DataDump\*") {
+                Copy-Item -Path "C:\DataDump\*" -Destination "$HOME\Desktop" -Recurse -Force
             }
         }
       shell: pwsh
 
-    - name: 1. AnyDesk Setup & ID Reveal
+    - name: 1. Start AnyDesk & Reveal ID
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
-        Start-Sleep -Seconds 10
+        Start-Sleep -Seconds 15
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
         
@@ -44,48 +40,55 @@ jobs:
         Write-Host "------------------------------------------------" -ForegroundColor Green
       shell: pwsh
 
-    - name: 2. Apply Theme & Settings
+    - name: 2. Force Apply Background & Registry
       run: |
-        # Force apply Registry for Wallpaper
-        if (Test-Path "$HOME\Desktop\WindowsSettings.reg") { 
-            reg import "$HOME\Desktop\WindowsSettings.reg"
+        # Check if the registry file exists on the desktop
+        $regFile = "$HOME\Desktop\WindowsSettings.reg"
+        if (Test-Path $regFile) { 
+            reg import $regFile
+            # This command forces the wallpaper to update from the registry
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
         powercfg -h off
       shell: pwsh
 
-    - name: 3. Session Timer
+    - name: 3. Session Timer (5h 40m)
       run: |
-        $timeout = New-TimeSpan -Hours 5 -Minutes 45 # 15 min buffer for upload
+        # Ending early to guarantee upload time
+        $timeout = New-TimeSpan -Hours 5 -Minutes 40
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 4. FORCED CONSOLIDATED SAVE
+    - name: 4. THE FORCED SAVE (Blocking Upload)
       if: always()
       run: |
         $mega = "C:\Program Files\MEGAcmd\mega-exec.exe"
-        # Export settings before packing
+        
+        # 1. Capture the current wallpaper/theme settings
         reg export "HKCU\Control Panel\Desktop" "$HOME\Desktop\WindowsSettings.reg" /y
         
-        # Zip everything into one file to prevent partial saves
-        Compress-Archive -Path "$HOME\Desktop\*" -DestinationPath "C:\FullBackup.zip" -Force
-        
-        # Split the Zip or distribute load
-        $size = (Get-Item "C:\FullBackup.zip").Length / 1MB
-        
+        # 2. Login and BLOCK until upload is done
         if (Test-Path $mega) {
-            # Account 1 Upload
             & $mega login halallazure@gmail.com 123456seven
+            
+            # Delete old backup to prevent storage full error
             & $mega rm -r /RDP_Backups/Part1
             & $mega mkdir -p /RDP_Backups/Part1
-            & $mega put "C:\FullBackup.zip" /RDP_Backups/Part1/
+            
+            # Upload EVERYTHING from Desktop
+            & $mega put "$HOME\Desktop\*" /RDP_Backups/Part1/
+            
+            # IMPORTANT: This forces the script to wait for the transfer to hit 100%
+            Write-Host "Forcing Sync... Do not close." -ForegroundColor Cyan
+            $waitCount = 0
+            while ($waitCount -lt 20) {
+                $status = & $mega transfers
+                if ($status -like "*No active transfers*") { break }
+                Start-Sleep -Seconds 10
+                $waitCount++
+            }
+            
             & $mega logout
-
-            # Account 2 Backup (Duplicate for safety since you have 40GB)
-            & $mega login halallyeager@gmail.com 123456seven
-            & $mega rm -r /RDP_Backups/Part2
-            & $mega mkdir -p /RDP_Backups/Part2
-            & $mega put "C:\FullBackup.zip" /RDP_Backups/Part2/
-            & $mega logout
+            Write-Host "SAVE COMPLETE" -ForegroundColor Green
         }
       shell: pwsh
