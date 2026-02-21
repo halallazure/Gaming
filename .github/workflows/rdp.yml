@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V19
+name: Ultimate-Gaming-VM-V20
 on: workflow_dispatch
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
 
-      - name: 3. Cloud Login and Restore
+      - name: 3. Cloud Login & Live Sync Setup
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -29,10 +29,19 @@ jobs:
           Start-Sleep -Seconds 15
           & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           Start-Sleep -Seconds 5
+          
+          # Create the cloud folder if it doesn't exist
           & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
+          
+          # First, download existing files to S:
           & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
+          
+          # START LIVE SYNC: This replaces the "Save" button. 
+          # It links the S: drive directly to /GamingVM in real-time.
+          & "$megaDir\mega-sync.bat" S:\ /GamingVM
+          Write-Host "Live Sync is now active. Every change on S: is saved immediately."
 
-      - name: 4. AnyDesk (ID Fixed) and Manual Save
+      - name: 4. AnyDesk (Reliable ID Capture)
         shell: pwsh
         run: |
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
@@ -45,28 +54,29 @@ jobs:
               RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
           }
 
-          # FIXED SAVE BUTTON: Using S:. to avoid path errors seen in logs
-          $DesktopPath = [Environment]::GetFolderPath("Desktop")
-          "@echo off`nset megaDir=%LOCALAPPDATA%\MEGAcmd`nreg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y`ncall `"%megaDir%\mega-put.bat`" S:\. /GamingVM/`necho SAVE COMPLETE! YOU CAN CLOSE NOW.`npause" | Out-File -FilePath "$DesktopPath\INSTANT_SAVE.bat" -Encoding ascii
-
-          # FORCE ID REFRESH
-          $ID = ""
-          while (-not $ID) {
-              $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-              if (-not $ID) { Start-Sleep -Seconds 2 }
+          # NEW ID CHECK: We will read the file directly and wait
+          $idFile = "C:\ProgramData\AnyDesk\system.conf"
+          for ($i=0; $i -lt 15; $i++) {
+              if (Test-Path $idFile) {
+                  $content = Get-Content $idFile
+                  if ($content -match "ad.anynet.id=(?<id>\d+)") {
+                      $ID = $matches['id']
+                      Write-Host "==========================================="
+                      Write-Host "ANYDESK ID: $ID"
+                      Write-Host "PASSWORD: GitHub@2026"
+                      Write-Host "==========================================="
+                      break
+                  }
+              }
+              Start-Sleep -Seconds 3
           }
-          Write-Host "==========================================="
-          Write-Host "ANYDESK ID: $ID"
-          Write-Host "PASSWORD: GitHub@2026"
-          Write-Host "==========================================="
 
-      - name: 5. Background Auto Save
+      - name: 5. Keep Alive & Registry Backup
         shell: pwsh
         run: |
-          $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
             if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
+            # Only need to export registry; mega-sync handles the files automatically
             reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-            & "$megaDir\mega-put.bat" S:\. /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
-            Start-Sleep -Seconds 120
+            Start-Sleep -Seconds 60
           }
