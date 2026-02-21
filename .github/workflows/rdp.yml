@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V3
+name: Ultimate-Gaming-VM-V4
 on: workflow_dispatch
 
 jobs:
@@ -15,10 +15,8 @@ jobs:
     - name: 2. Install Storage & MEGA
       shell: pwsh
       run: |
-        # Create Disk
         $vhdPath = "C:\GamingDisk.vhd"
         "create vdisk file='$vhdPath' maximum=30720 type=expandable", "attach vdisk", "create partition primary", "format fs=ntfs quick label='Gaming'", "assign letter=S" | diskpart
-        # Install MEGAcmd
         curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
         Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
         Start-Sleep -Seconds 10
@@ -29,30 +27,30 @@ jobs:
         M_USER: ${{ secrets.MEGA_EMAIL }}
         M_PASS: ${{ secrets.MEGA_PASSWORD }}
       run: |
-        # Use Absolute Paths to avoid 'not recognized' error
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
-        
-        # Start the MEGA server in the background first
         Start-Process "$megaDir\MEGAcmdServer.exe" -WindowStyle Hidden
         Start-Sleep -Seconds 10
         
-        # Login using absolute path
+        # Login
         & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+        Start-Sleep -Seconds 5
         
-        # Start the Sync
-        & "$megaDir\mega-sync.bat" S:\ /GamingVM
+        # FIXED: Ensure the Mega folder exists first to avoid "Sync not found"
+        & "$megaDir\mega-mkdir.bat" /GamingVM
+        
+        # FIXED: Simplified path for sync
+        & "$megaDir\mega-sync.bat" S: /GamingVM
         Write-Host "Sync established with Mega.nz"
 
     - name: 4. AnyDesk & Restore Settings
       shell: pwsh
       run: |
-        # AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # Restore Registry from S: (which is now synced to Mega)
+        # Restore Registry
         if (Test-Path "S:\Backup\System.reg") { reg import "S:\Backup\System.reg" }
         RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         
@@ -62,6 +60,7 @@ jobs:
     - name: 5. Active Session
       shell: pwsh
       run: |
+        # Loop forever until you manually stop the session
         while ($true) { 
           if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
           reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
