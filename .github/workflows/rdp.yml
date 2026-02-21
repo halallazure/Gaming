@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V14
+name: Ultimate-Gaming-VM-V16
 on: workflow_dispatch
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
 
-      - name: 2. Create Gaming Drive S
+      - name: 2. Setup Gaming Drive S
         shell: pwsh
         run: |
           $vhdPath = "C:\GamingDisk.vhd"
@@ -32,22 +32,26 @@ jobs:
           & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
           & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
 
-      - name: 4. AnyDesk Connection
+      - name: 4. AnyDesk and Immediate Save Setup
         shell: pwsh
         run: |
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
           Start-Sleep -Seconds 8
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+          
+          # Restore previous settings
           if (Test-Path "S:\Backup\System.reg") { 
               reg import "S:\Backup\System.reg" 
               RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
           }
+
+          # CREATE THE IMMEDIATE SAVE BUTTON (Simple Batch version to avoid YAML errors)
+          $DesktopPath = [Environment]::GetFolderPath("Desktop")
+          "@echo off`nset megaDir=%LOCALAPPDATA%\MEGAcmd`nreg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y`ncall `"%megaDir%\mega-put.bat`" S:\* /GamingVM/`necho SAVE COMPLETE! YOU CAN CLOSE NOW.`npause" | Out-File -FilePath "$DesktopPath\INSTANT_SAVE.bat" -Encoding ascii
+
           $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-          Write-Host "==========================================="
-          Write-Host "ANYDESK ID: $ID"
-          Write-Host "PASSWORD: GitHub@2026"
-          Write-Host "==========================================="
+          Write-Host "ANYDESK ID: $ID | Password: GitHub@2026"
 
       - name: 5. Background Auto Save
         shell: pwsh
