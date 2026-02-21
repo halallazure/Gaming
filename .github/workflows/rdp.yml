@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V16
+name: Ultimate-Gaming-VM-V17
 on: workflow_dispatch
 
 jobs:
@@ -32,24 +32,20 @@ jobs:
           & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
           & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
 
-      - name: 4. AnyDesk and Immediate Save Setup
+      - name: 4. AnyDesk and Fixed Instant Save
         shell: pwsh
         run: |
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
           Start-Sleep -Seconds 8
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          
-          # Restore previous settings
           if (Test-Path "S:\Backup\System.reg") { 
               reg import "S:\Backup\System.reg" 
               RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
           }
-
-          # CREATE THE IMMEDIATE SAVE BUTTON (Simple Batch version to avoid YAML errors)
           $DesktopPath = [Environment]::GetFolderPath("Desktop")
-          "@echo off`nset megaDir=%LOCALAPPDATA%\MEGAcmd`nreg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y`ncall `"%megaDir%\mega-put.bat`" S:\* /GamingVM/`necho SAVE COMPLETE! YOU CAN CLOSE NOW.`npause" | Out-File -FilePath "$DesktopPath\INSTANT_SAVE.bat" -Encoding ascii
-
+          # FIXED COMMAND: Removed the * and added standard pathing to avoid \\?\ error
+          "@echo off`nset megaDir=%LOCALAPPDATA%\MEGAcmd`nreg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y`ncall `"%megaDir%\mega-put.bat`" S:\ /GamingVM/`necho SAVE COMPLETE! YOU CAN CLOSE NOW.`npause" | Out-File -FilePath "$DesktopPath\INSTANT_SAVE.bat" -Encoding ascii
           $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
           Write-Host "ANYDESK ID: $ID | Password: GitHub@2026"
 
@@ -60,6 +56,6 @@ jobs:
           while ($true) {
             if (!(Test-Path "S:\Backup")) { New-Item -Path "S:\Backup" -ItemType Directory -Force }
             reg export "HKCU\Control Panel\Desktop" "S:\Backup\System.reg" /y
-            & "$megaDir\mega-put.bat" S:\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
+            & "$megaDir\mega-put.bat" S:\ /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
             Start-Sleep -Seconds 120
           }
