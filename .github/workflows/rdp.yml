@@ -1,4 +1,4 @@
-name: AnyDesk-30GB-Conflict-Free
+name: AnyDesk-30GB-Persistence-S
 on: workflow_dispatch
 
 jobs:
@@ -12,42 +12,35 @@ jobs:
         name: persistent-vhd
         path: C:\
 
-    - name: 2. Create or Mount Drive S:
+    - name: 2. Create or Mount Drive S
       shell: pwsh
       run: |
         if (!(Test-Path "C:\WorkData.vhd")) {
-          $vhdScript = "create vdisk file='C:\WorkData.vhd' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Storage'`nassign letter=S"
-          $vhdScript | diskpart
+          $script = "create vdisk file='C:\WorkData.vhd' maximum=30720 type=expandable`nattach vdisk`ncreate partition primary`nformat fs=ntfs quick label='Storage'`nassign letter=S"
+          $script | diskpart
         } else {
-          $vhdScript = "select vdisk file='C:\WorkData.vhd'`nattach vdisk`nassign letter=S"
-          $vhdScript | diskpart
+          $script = "select vdisk file='C:\WorkData.vhd'`nattach vdisk`nassign letter=S"
+          $script | diskpart
         }
-        
-        # Setup AnyDesk
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 5
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         Start-Process "C:\AnyDesk\AnyDesk.exe" -ArgumentList "--service"
 
-    - name: 3. Restore Settings & Desktop Link
+    - name: 3. Restore and Reveal ID
       shell: pwsh
       run: |
         $WshShell = New-Object -ComObject WScript.Shell
         $Shortcut = $WshShell.CreateShortcut("$HOME\Desktop\SAVE_HERE_S.lnk")
         $Shortcut.TargetPath = "S:\"
         $Shortcut.Save()
-
-        # Restore Registry (Wallpaper/Settings) from S: drive
         if (Test-Path "S:\WindowsSettings.reg") { 
           reg import "S:\WindowsSettings.reg"
           RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
-        Write-Host "------------------------------------------------"
-        Write-Host "      ID: $ID | Password: GitHub@2026"
-        Write-Host "------------------------------------------------"
+        Write-Host "ID: $ID | Password: GitHub@2026"
 
     - name: 4. Active Session
       shell: pwsh
@@ -56,17 +49,14 @@ jobs:
         $stopwatch = [Diagnostics.Stopwatch]::StartNew()
         while ($stopwatch.Elapsed -lt $timeout) { Start-Sleep -Seconds 60 }
 
-    - name: 5. Final Save (Settings & Detach)
+    - name: 5. Save and Detach
       if: always()
       shell: pwsh
       run: |
-        # Export Settings to the persistent S: drive
         reg export "HKCU\Control Panel\Desktop" "S:\WindowsSettings.reg" /y
-        
-        # Select and Detach
         "select vdisk file='C:\WorkData.vhd'`ndetach vdisk" | diskpart
 
-    - name: 6. Secure Upload to GitHub
+    - name: 6. Final Sync
       if: always()
       uses: actions/upload-artifact@v4
       with:
