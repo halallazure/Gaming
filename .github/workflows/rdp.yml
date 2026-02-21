@@ -9,7 +9,6 @@ jobs:
       run: |
         powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
         reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
-        # Optimize AnyDesk for Graphics
         reg add "HKCU\Software\AnyDesk\Global" /v "ViewMode" /t REG_DWORD /d 1 /f
 
     - name: 2. Create 30GB Persistence Drive
@@ -31,33 +30,26 @@ jobs:
         Start-Sleep -Seconds 15
         & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
         Start-Sleep -Seconds 5
-        
-        # Pull data from Mega to S: drive
         & "$megaDir\mega-mkdir.bat" /GamingVM 2>$null; $global:LASTEXITCODE = 0
-        Write-Host "Downloading your previous session settings..."
         & "$megaDir\mega-get.bat" -m /GamingVM S:\ 2>$null; $global:LASTEXITCODE = 0
 
-    - name: 4. AnyDesk & Auto-Appearance Refresh
+    - name: 4. AnyDesk & Desktop Restore
       shell: pwsh
       run: |
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         ./anydesk.exe --install C:\AnyDesk --start-with-win --silent
         Start-Sleep -Seconds 8
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-        
-        # Restore Registry (Wallpaper, Icons, Theme)
         if (Test-Path "S:\Backup\System.reg") { 
             reg import "S:\Backup\System.reg" 
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
         }
-
-        # CREATE THE "FORCE SAVE" DESKTOP SHORTCUT
         $DesktopPath = [Environment]::GetFolderPath("Desktop")
         $SaveScript = @"
         `$megaDir = `"`$env:LOCALAPPDATA\MEGAcmd`"
         reg export `"HKCU\Control Panel\Desktop`" `"S:\Backup\System.reg`" /y
         & `"`$megaDir\mega-put.bat`" S:\* /GamingVM/
-        msg * `"SUCCESS: Your changes are now safe in Mega Cloud. You can close the VM.`"
+        msg * `"SUCCESS: Your changes are now safe in Mega Cloud.`"
 "@
         $SaveScript | Out-File -FilePath "C:\ForceSave.ps1"
         $s = (New-Object -ComObject WScript.Shell).CreateShortcut("$DesktopPath\SAVE_MY_PROGRESS.lnk")
@@ -65,11 +57,10 @@ jobs:
         $s.Arguments = "-ExecutionPolicy Bypass -File C:\ForceSave.ps1"
         $s.IconLocation = "shell32.dll,258"
         $s.Save()
-
         $ID = Select-String -Path "C:\ProgramData\AnyDesk\system.conf" -Pattern "ad.anynet.id=(.*)" | ForEach-Object { $_.Matches.Groups[1].Value }
         Write-Host "ID: $ID | Password: GitHub@2026"
 
-    - name: 5. Background Auto-Save (Every 120s)
+    - name: 5. Background Auto-Save
       shell: pwsh
       run: |
         $megaDir = "${env:LOCALAPPDATA}\MEGAcmd"
