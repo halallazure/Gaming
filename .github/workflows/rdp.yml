@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V25
+name: Ultimate-Gaming-VM-V27
 on: workflow_dispatch
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. High-Speed Cloud Restore & Auto-Unzip
+      - name: 2. High-Speed Restore (Folders + Settings)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -27,28 +27,22 @@ jobs:
           & "$m\mega-speedlimit.bat" --download-connections 10
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Try to get the fast zip file
+          # Fast-track download (Takes ~2 mins)
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\GamingVM\
           
           if (Test-Path "C:\GamingVM\Data.7z") {
-            # Added a test to see if the zip is valid before trying to extract
-            7z t C:\GamingVM\Data.7z
-            if ($global:LASTEXITCODE -eq 0) {
-                7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
-            } else {
-                Write-Host "Zip corrupted, pulling loose files instead..."
-                & "$m\mega-get.bat" /GamingVM C:\GamingVM\
-            }
-            Remove-Item "C:\GamingVM\Data.7z" -Force -ErrorAction SilentlyContinue
+            7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
+            Remove-Item "C:\GamingVM\Data.7z" -Force
           } else {
+            # Safety: If zip is missing, pull everything loose
             & "$m\mega-get.bat" /GamingVM C:\GamingVM\
           }
           
-          # Restore settings only if they exist
+          # RESTORE SETTINGS: This makes your taskbar clear and positions correct
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
-      - name: 3. Connect AnyDesk
+      - name: 3. AnyDesk Connection
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
@@ -61,34 +55,34 @@ jobs:
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Background Auto-Save (Smart Registry Check)
+      - name: 4. Continuous Auto-Save (6hr & Cancel Protection)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # Only export TranslucentTB if the key actually exists
+            # Capture Settings
             if (Test-Path "HKCU:\Software\TranslucentTB") {
                 reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             }
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             
-            # Compress and Upload
-            7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
+            # Pack Everything (Rainmeter, Wallpaper Engine, TB folders)
+            Set-Location "C:\GamingVM"
+            7z a Data.7z * -x!Data.7z -y
+            
+            # Sync to Cloud
             & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/ 2>$null
             & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/ 2>$null
             Start-Sleep -Seconds 240
           }
 
-      - name: 5. Final Safety Save
+      - name: 5. Emergency Save on Exit
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Final export check for your app settings
-          if (Test-Path "HKCU:\Software\TranslucentTB") {
-              reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
-          }
+          Set-Location "C:\GamingVM"
+          reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-          7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
+          7z a Data.7z * -x!Data.7z -y
           & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/
-          & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/
