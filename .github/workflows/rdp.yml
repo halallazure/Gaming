@@ -27,18 +27,18 @@ jobs:
           & "$m\mega-speedlimit.bat" --download-connections 10
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Try to get the fast zip file first
+          # This successfully pulled your 319MB Data.7z
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\GamingVM\
           
-          # If zip exists, unzip it. If not, download loose files
           if (Test-Path "C:\GamingVM\Data.7z") {
+            # Extracting with a delay to ensure the file isn't "In Use"
             7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
-            Remove-Item "C:\GamingVM\Data.7z"
+            Remove-Item "C:\GamingVM\Data.7z" -Force -ErrorAction SilentlyContinue
           } else {
             & "$m\mega-get.bat" /GamingVM C:\GamingVM\
           }
           
-          # RESTORE SETTINGS: Taskbar, Rainmeter, and TranslucentTB
+          # Restore settings only if the backup exists
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
@@ -55,18 +55,21 @@ jobs:
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Background Auto-Save (Auto-Compress)
+      - name: 4. Background Auto-Save (Fix Registry Search)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
+          # Wait 1 minute for you to open TranslucentTB/Rainmeter so the Registry keys are created
+          Start-Sleep -Seconds 60 
           while ($true) {
-            # SAVE SETTINGS: Capture your visual changes
-            reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
+            # Only export if the app has created the key
+            if (Get-Item -Path "HKCU:\Software\TranslucentTB" -ErrorAction SilentlyContinue) {
+                reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
+            }
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             
-            # Create the high-speed file for next session
+            # Compress and Upload
             7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
-            
             & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/ 2>$null
             & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/ 2>$null
             Start-Sleep -Seconds 180
@@ -77,7 +80,10 @@ jobs:
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
+          # Final export check
+          if (Get-Item -Path "HKCU:\Software\TranslucentTB" -ErrorAction SilentlyContinue) {
+              reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
+          }
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
           & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/
