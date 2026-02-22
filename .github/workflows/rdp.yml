@@ -14,7 +14,7 @@ jobs:
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. High-Speed Cloud Restore
+      - name: 2. High-Speed Cloud Restore & Auto-Unzip
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -23,18 +23,20 @@ jobs:
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 15
-          
-          # CRITICAL: SET SPEED BEFORE LOGIN
-          # This forces the "Fetching nodes" to use 6 parallel streams immediately
-          & "$m\mega-speedlimit.bat" --upload-connections 6
-          & "$m\mega-speedlimit.bat" --download-connections 6
-          
+          & "$m\mega-speedlimit.bat" --upload-connections 10
+          & "$m\mega-speedlimit.bat" --download-connections 10
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Direct get: This skips the heavy sync engine and just pulls the files
-          & "$m\mega-get.bat" /GamingVM C:\GamingVM\
+          # Download the single compressed file (VERY FAST)
+          & "$m\mega-get.bat" /GamingVM/Data.7z C:\GamingVM\
           
-          # Restore TranslucentTB & Rainmeter positions
+          # Automatically unzip everything into place
+          if (Test-Path "C:\GamingVM\Data.7z") {
+            7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
+            Remove-Item "C:\GamingVM\Data.7z"
+          }
+          
+          # Restore TranslucentTB & System Settings
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
@@ -43,35 +45,38 @@ jobs:
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
-          for ($i=0; $i -lt 20; $i++) {
+          for ($i=0; $i -lt 10; $i++) {
               if (Test-Path $idFile) {
                   $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
-                  if ($ID) {
-                      Write-Host "ANYDESK_ID: $ID"
-                      break
-                  }
+                  if ($ID) { Write-Host "ANYDESK_ID: $ID"; break }
               }
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Background Auto-Save
+      - name: 4. Background Auto-Save (Auto-Compress)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # Save taskbar and app positions
+            # 1. Export Settings
             reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-            & "$m\mega-put.bat" -c C:\GamingVM\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
-            Start-Sleep -Seconds 60
+            
+            # 2. Automatically compress the small files into one
+            7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
+            
+            # 3. Upload the single fast file
+            & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/ 2>$null
+            & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/ 2>$null
+            
+            Start-Sleep -Seconds 120
           }
 
-      - name: 5. Final Safety Save
+      - name: 5. Final Emergency Save
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           & "$m\mega-sync-issues.bat" --discard-all 2>$null
-          reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
-          reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-          & "$m\mega-put.bat" -c C:\GamingVM\* /GamingVM/
+          7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
+          & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/
