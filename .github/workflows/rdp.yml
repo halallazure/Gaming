@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V24
+name: Ultimate-Gaming-VM-V25
 on: workflow_dispatch
 
 jobs:
@@ -22,23 +22,29 @@ jobs:
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
-          Start-Sleep -Seconds 20
+          Start-Sleep -Seconds 25
           & "$m\mega-speedlimit.bat" --upload-connections 10
           & "$m\mega-speedlimit.bat" --download-connections 10
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # This successfully pulled your 319MB Data.7z
+          # Try to get the fast zip file
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\GamingVM\
           
           if (Test-Path "C:\GamingVM\Data.7z") {
-            # Extracting with a delay to ensure the file isn't "In Use"
-            7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
+            # Added a test to see if the zip is valid before trying to extract
+            7z t C:\GamingVM\Data.7z
+            if ($global:LASTEXITCODE -eq 0) {
+                7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
+            } else {
+                Write-Host "Zip corrupted, pulling loose files instead..."
+                & "$m\mega-get.bat" /GamingVM C:\GamingVM\
+            }
             Remove-Item "C:\GamingVM\Data.7z" -Force -ErrorAction SilentlyContinue
           } else {
             & "$m\mega-get.bat" /GamingVM C:\GamingVM\
           }
           
-          # Restore settings only if the backup exists
+          # Restore settings only if they exist
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
@@ -55,15 +61,13 @@ jobs:
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Background Auto-Save (Fix Registry Search)
+      - name: 4. Background Auto-Save (Smart Registry Check)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Wait 1 minute for you to open TranslucentTB/Rainmeter so the Registry keys are created
-          Start-Sleep -Seconds 60 
           while ($true) {
-            # Only export if the app has created the key
-            if (Get-Item -Path "HKCU:\Software\TranslucentTB" -ErrorAction SilentlyContinue) {
+            # Only export TranslucentTB if the key actually exists
+            if (Test-Path "HKCU:\Software\TranslucentTB") {
                 reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             }
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
@@ -72,7 +76,7 @@ jobs:
             7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
             & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/ 2>$null
             & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/ 2>$null
-            Start-Sleep -Seconds 180
+            Start-Sleep -Seconds 240
           }
 
       - name: 5. Final Safety Save
@@ -80,8 +84,8 @@ jobs:
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Final export check
-          if (Get-Item -Path "HKCU:\Software\TranslucentTB" -ErrorAction SilentlyContinue) {
+          # Final export check for your app settings
+          if (Test-Path "HKCU:\Software\TranslucentTB") {
               reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
           }
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
