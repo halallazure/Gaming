@@ -30,15 +30,16 @@ jobs:
           # Try to get the fast zip file first
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\GamingVM\
           
-          # If zip exists, unzip it. If not, download the loose files (First run only)
+          # If zip exists, unzip it. If not, download loose files
           if (Test-Path "C:\GamingVM\Data.7z") {
             7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\GamingVM\Data.7z"
           } else {
+            Write-Host "Zip not found, pulling loose files for this session..."
             & "$m\mega-get.bat" /GamingVM C:\GamingVM\
           }
           
-          # RESTORE YOUR CHANGES: Taskbar, Rainmeter, and TranslucentTB settings
+          # RESTORE SETTINGS: Taskbar, Rainmeter, and TranslucentTB
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
@@ -60,25 +61,24 @@ jobs:
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # SAVE YOUR CHANGES: Export taskbar and app positions
+            # SAVE SETTINGS: Capture your visual changes
             reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             
-            # Compress everything into the high-speed file
+            # Create the high-speed file for next session
             7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
             
-            # Upload to cloud
             & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/ 2>$null
             & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/ 2>$null
             Start-Sleep -Seconds 180
           }
 
-      - name: 5. Final Emergency Save
+      - name: 5. Final Safety Save
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Final export of your settings before shutdown
+          # Final export of all app settings
           reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
