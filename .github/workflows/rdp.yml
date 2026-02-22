@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V30
+name: Ultimate-Gaming-VM-V31
 on: workflow_dispatch
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
         run: |
           # Create root folder
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
-          # Download essential tools
+          # Download tools
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
@@ -25,23 +25,23 @@ jobs:
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
-          & "$m\mega-speedlimit.bat" --upload-connections 10
-          & "$m\mega-speedlimit.bat" --download-connections 10
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Try to get the zip from the root C:\ drive to avoid folder nesting
+          # Try to get the zip
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\Data.7z" -Force
           } else {
-            Write-Host "MEGA is empty. Starting fresh session..."
+            Write-Host "MEGA is empty or Zip not found. Starting fresh session..."
           }
           
-          # Restore settings
+          # Restore settings ONLY if backup exists
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
+          # Continue even if nothing was found
+          exit 0
 
       - name: 3. Connect AnyDesk
         shell: pwsh
@@ -56,26 +56,26 @@ jobs:
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Master Auto-Save (The Fix)
+      - name: 4. Master Auto-Save
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # 1. Save Registry (Taskbar/Rainmeter positions)
+            # 1. Save Registry positions
             if (Test-Path "HKCU:\Software\TranslucentTB") {
                 reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             }
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             
-            # 2. ZIP TO C:\ (OUTSIDE GamingVM) to prevent infinite loops
+            # 2. ZIP Everything into C:\ to avoid the folder loop
             7z a C:\Data.7z C:\GamingVM\* -y
             
-            # 3. Upload to MEGA
+            # 3. Upload
             & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/ 2>$null
             Start-Sleep -Seconds 300
           }
 
-      - name: 5. Final Emergency Save
+      - name: 5. Final Emergency Save (6hr / Cancel)
         if: always()
         shell: pwsh
         run: |
