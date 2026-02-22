@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V27
+name: Ultimate-Gaming-VM-V28
 on: workflow_dispatch
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. High-Speed Restore (Folders + Settings)
+      - name: 2. Smart Cloud Restore
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -27,18 +27,19 @@ jobs:
           & "$m\mega-speedlimit.bat" --download-connections 10
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Fast-track download (Takes ~2 mins)
+          # 1. Try to download the fast Zip first
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\GamingVM\
           
           if (Test-Path "C:\GamingVM\Data.7z") {
             7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\GamingVM\Data.7z" -Force
           } else {
-            # Safety: If zip is missing, pull everything loose
-            & "$m\mega-get.bat" /GamingVM C:\GamingVM\
+            # 2. If no zip, download all loose folders from MEGA
+            Write-Host "Zip not found. Pulling loose folders... this will take a moment."
+            & "$m\mega-get.bat" /GamingVM/* C:\GamingVM\
           }
           
-          # RESTORE SETTINGS: This makes your taskbar clear and positions correct
+          # 3. Restore Desktop/Taskbar Settings
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
@@ -55,33 +56,33 @@ jobs:
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Continuous Auto-Save (6hr & Cancel Protection)
+      - name: 4. Background Save (Fixes Loop & Startup Speed)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # Capture Settings
+            # Save Registry Settings
             if (Test-Path "HKCU:\Software\TranslucentTB") {
                 reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             }
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             
-            # Pack Everything (Rainmeter, Wallpaper Engine, TB folders)
-            Set-Location "C:\GamingVM"
+            # Create a clean zip of all your folders
+            cd C:\GamingVM
             7z a Data.7z * -x!Data.7z -y
             
-            # Sync to Cloud
+            # Sync to MEGA
             & "$m\mega-put.bat" -c C:\GamingVM\Data.7z /GamingVM/ 2>$null
             & "$m\mega-put.bat" -c C:\GamingVM\Backup\* /GamingVM/Backup/ 2>$null
-            Start-Sleep -Seconds 240
+            Start-Sleep -Seconds 300
           }
 
-      - name: 5. Emergency Save on Exit
+      - name: 5. Emergency Save on 6hr / Cancel
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          Set-Location "C:\GamingVM"
+          cd C:\GamingVM
           reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a Data.7z * -x!Data.7z -y
