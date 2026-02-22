@@ -8,17 +8,13 @@ jobs:
       - name: 1. Setup Folders and Apps
         shell: pwsh
         run: |
-          # Create folders first
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
-          # Download Mega and AnyDesk
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-          # Install Mega with the correct PowerShell syntax
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
-          # Install AnyDesk
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Cloud Login and Restore
+      - name: 2. Cloud Login and High-Speed Restore
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -28,15 +24,17 @@ jobs:
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 25
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          # Optimization: Set high-speed upload connections immediately
+          # Optimization: Set 6 connections BEFORE downloading to fix the 18-min wait
           & "$m\mega-speedlimit.bat" --upload-connections 6
+          & "$m\mega-speedlimit.bat" --download-connections 6
           & "$m\mega-get.bat" /GamingVM C:\GamingVM\ 2>$null; $global:LASTEXITCODE = 0
+          # Auto-Restore TranslucentTB/Rainmeter settings
+          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 3. Connect AnyDesk and Show ID
+      - name: 3. Connect AnyDesk
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          Write-Host "Waiting for AnyDesk ID..."
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           for ($i=0; $i -lt 20; $i++) {
               if (Test-Path $idFile) {
@@ -51,26 +49,27 @@ jobs:
               }
               Start-Sleep -Seconds 5
           }
-          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Auto-Save to Mega
+      - name: 4. Background Auto-Save (Every 60s)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            reg export "HKCU\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
+            # Save taskbar/app positions to registry file
+            reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
+            reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             & "$m\mega-put.bat" -c C:\GamingVM\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
             Start-Sleep -Seconds 60
           }
 
-      - name: 5. Final Safety Save (Emergency)
+      - name: 5. Final Safety Save (Runs on Cancel/Timeout)
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          Write-Host "CRITICAL: Workflow ending. Performing final emergency save..."
-          # Clean up any "Rubbish" conflicts so the save doesn't hang
+          Write-Host "Emergency Save Triggered..."
           & "$m\mega-sync-issues.bat" --discard-all 2>$null
-          reg export "HKCU\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
+          reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
+          reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           & "$m\mega-put.bat" -c C:\GamingVM\* /GamingVM/
-          Write-Host "SUCCESS: Final save complete. Data is secure."
+          Write-Host "Safe to close."
