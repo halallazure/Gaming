@@ -35,7 +35,6 @@ jobs:
             7z x C:\GamingVM\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\GamingVM\Data.7z"
           } else {
-            Write-Host "Zip not found, pulling loose files for this session..."
             & "$m\mega-get.bat" /GamingVM C:\GamingVM\
           }
           
@@ -78,7 +77,6 @@ jobs:
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Final export of all app settings
           reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a C:\GamingVM\Data.7z C:\GamingVM\* -x!Data.7z -y
