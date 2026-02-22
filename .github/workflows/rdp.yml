@@ -14,7 +14,7 @@ jobs:
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Cloud Login and High-Speed Restore
+      - name: 2. High-Speed Cloud Restore
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -22,17 +22,19 @@ jobs:
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
-          Start-Sleep -Seconds 20
-          & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+          Start-Sleep -Seconds 15
           
-          # Sets 6 connections BEFORE downloading to fix the 18-min wait
+          # CRITICAL: SET SPEED BEFORE LOGIN
+          # This forces the "Fetching nodes" to use 6 parallel streams immediately
           & "$m\mega-speedlimit.bat" --upload-connections 6
           & "$m\mega-speedlimit.bat" --download-connections 6
           
-          # Faster Download
-          & "$m\mega-get.bat" /GamingVM C:\GamingVM\ 2>$null; $global:LASTEXITCODE = 0
+          & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Auto-Restore Settings for TranslucentTB/Taskbar
+          # Direct get: This skips the heavy sync engine and just pulls the files
+          & "$m\mega-get.bat" /GamingVM C:\GamingVM\
+          
+          # Restore TranslucentTB & Rainmeter positions
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
@@ -45,34 +47,30 @@ jobs:
               if (Test-Path $idFile) {
                   $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
                   if ($ID) {
-                      Write-Host "==========================================="
                       Write-Host "ANYDESK_ID: $ID"
-                      Write-Host "PASSWORD: GitHub@2026"
-                      Write-Host "==========================================="
                       break
                   }
               }
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Auto-Save (Background)
+      - name: 4. Background Auto-Save
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # Exports settings to MEGA so they reappear next session
+            # Save taskbar and app positions
             reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             & "$m\mega-put.bat" -c C:\GamingVM\* /GamingVM/ 2>$null; $global:LASTEXITCODE = 0
             Start-Sleep -Seconds 60
           }
 
-      - name: 5. Final Safety Save (Always Runs)
+      - name: 5. Final Safety Save
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Discards conflicts to prevent hanging
           & "$m\mega-sync-issues.bat" --discard-all 2>$null
           reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
