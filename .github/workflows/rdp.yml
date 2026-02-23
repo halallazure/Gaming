@@ -1,24 +1,22 @@
-name: Ultimate-Gaming-VM-V35
+name: Ultimate-Gaming-VM-V36
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. System Requirements & Apps
+      - name: 1. Speed-Install System Requirements
         shell: pwsh
         run: |
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
-          # Install Visual C++ (Fixes TranslucentTB Error)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
-          # Install AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Smart Mirror Restore
+      - name: 2. High-Speed Restore (< 3 mins)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -29,14 +27,19 @@ jobs:
           Start-Sleep -Seconds 30
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           
-          # Download everything loose (fastest for small file changes)
-          & "$m\mega-get.bat" /GamingVM/* C:\GamingVM\
+          # Fast Download of the single big archive
+          & "$m\mega-get.bat" /GamingVM/Data.7z C:\
           
-          # Restore settings
+          if (Test-Path "C:\Data.7z") {
+            7z x C:\Data.7z -oC:\GamingVM\ -y
+            Remove-Item "C:\Data.7z" -Force
+          }
+          
+          # Instant Registry Restore
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
-      - name: 3. Start AnyDesk
+      - name: 3. Connect AnyDesk
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
@@ -49,28 +52,12 @@ jobs:
             Start-Sleep -Seconds 5
           }
 
-      - name: 4. Live Sync Engine (Mirror Mode)
-        shell: pwsh
-        run: |
-          $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          # Enable live mirror sync (deletions in VM = deletions in Cloud)
-          & "$m\mega-sync.bat" C:\GamingVM /GamingVM
-          
-          while ($true) {
-            # Continuously update registry settings to the synced folder
-            reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-            if (Test-Path "HKCU:\Software\TranslucentTB") {
-                reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
-            }
-            Start-Sleep -Seconds 60
-          }
-
-      - name: 5. Final Safety Push (6hr / Cancel)
+      - name: 4. Final Safety Save (Guaranteed)
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-          # Force a final sync check before shutdown
-          & "$m\mega-sync.bat"
-          Start-Sleep -Seconds 30
+          # Create the single Speed-Archive
+          7z a C:\Data.7z C:\GamingVM\* -y
+          & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
