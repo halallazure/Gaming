@@ -1,24 +1,24 @@
-name: Ultimate-Gaming-VM-V33
+name: Ultimate-Gaming-VM-V35
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install System Requirements & Apps
+      - name: 1. System Requirements & Apps
         shell: pwsh
         run: |
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
           # Install Visual C++ (Fixes TranslucentTB Error)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
-          # Install AnyDesk and MEGA
+          # Install AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Smart Restore (Fast Startup)
+      - name: 2. Smart Mirror Restore
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -28,53 +28,49 @@ jobs:
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          # Get Zip from MEGA
-          & "$m\mega-get.bat" /GamingVM/Data.7z C:\ 2>$null
-          if (Test-Path "C:\Data.7z") {
-            7z x C:\Data.7z -oC:\GamingVM\ -y
-            Remove-Item "C:\Data.7z" -Force
-          }
-          # Import Registry
+          
+          # Download everything loose (fastest for small file changes)
+          & "$m\mega-get.bat" /GamingVM/* C:\GamingVM\
+          
+          # Restore settings
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
-      - name: 3. Connect AnyDesk
+      - name: 3. Start AnyDesk
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           for ($i=0; $i -lt 15; $i++) {
-              if (Test-Path $idFile) {
-                  $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
-                  if ($ID) { Write-Host "ANYDESK_ID: $ID"; break }
-              }
-              Start-Sleep -Seconds 5
+            if (Test-Path $idFile) {
+              $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+              if ($ID) { Write-Host "ANYDESK_ID: $ID"; break }
+            }
+            Start-Sleep -Seconds 5
           }
 
-      - name: 4. Background Auto-Save
+      - name: 4. Live Sync Engine (Mirror Mode)
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
+          # Enable live mirror sync (deletions in VM = deletions in Cloud)
+          & "$m\mega-sync.bat" C:\GamingVM /GamingVM
+          
           while ($true) {
-            # Save Reg keys
+            # Continuously update registry settings to the synced folder
             reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             if (Test-Path "HKCU:\Software\TranslucentTB") {
                 reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             }
-            # ZIP and Upload
-            7z a C:\Data.7z C:\GamingVM\* -y
-            & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/ 2>$null
-            Start-Sleep -Seconds 300
+            Start-Sleep -Seconds 60
           }
 
-      - name: 5. Final Safety Save (6hr / Cancel / Fail)
+      - name: 5. Final Safety Push (6hr / Cancel)
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          Write-Host "Triggering Emergency Cloud Sync..."
-          # Final export and zip
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-          7z a C:\Data.7z C:\GamingVM\* -y
-          # Final Upload to MEGA
-          & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
+          # Force a final sync check before shutdown
+          & "$m\mega-sync.bat"
+          Start-Sleep -Seconds 30
