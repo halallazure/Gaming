@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V32
+name: Ultimate-Gaming-VM-V33
 on: workflow_dispatch
 
 jobs:
@@ -8,21 +8,17 @@ jobs:
       - name: 1. Install System Requirements & Apps
         shell: pwsh
         run: |
-          # Create folders
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
-          
-          # FIX: Install Visual C++ Redistributable (Required for TranslucentTB)
-          Write-Host "Installing Microsoft VCLibs..."
+          # Install Visual C++ (Fixes TranslucentTB Error)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
-          
           # Install AnyDesk and MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Smart Cloud Restore (Zero Failure)
+      - name: 2. Smart Restore (Fast Startup)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -32,21 +28,15 @@ jobs:
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          
-          # Try to get the zip, but don't fail if it's not there
+          # Get Zip from MEGA
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\ 2>$null
-          
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\Data.7z" -Force
-          } else {
-            Write-Host "Starting fresh: No previous data found in MEGA."
           }
-          
-          # Restore settings only if they exist
+          # Import Registry
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
           if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
-          exit 0
 
       - name: 3. Connect AnyDesk
         shell: pwsh
@@ -61,30 +51,30 @@ jobs:
               Start-Sleep -Seconds 5
           }
 
-      - name: 4. Master Auto-Save (The Loop Killer)
+      - name: 4. Background Auto-Save
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           while ($true) {
-            # Save Registry Settings
+            # Save Reg keys
+            reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
             if (Test-Path "HKCU:\Software\TranslucentTB") {
                 reg export "HKEY_CURRENT_USER\Software\TranslucentTB" "C:\GamingVM\Backup\Translucent.reg" /y
             }
-            reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-            
-            # ZIP to C:\ (Outside) to prevent folder-in-folder loops
+            # ZIP and Upload
             7z a C:\Data.7z C:\GamingVM\* -y
-            
-            # Upload to MEGA
             & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/ 2>$null
             Start-Sleep -Seconds 300
           }
 
-      - name: 5. Emergency Save on Exit
+      - name: 5. Final Safety Save (6hr / Cancel / Fail)
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
+          Write-Host "Triggering Emergency Cloud Sync..."
+          # Final export and zip
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a C:\Data.7z C:\GamingVM\* -y
+          # Final Upload to MEGA
           & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
