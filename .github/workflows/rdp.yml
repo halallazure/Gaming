@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V36
+name: Ultimate-Gaming-VM-V37
 on: workflow_dispatch
 
 jobs:
@@ -9,8 +9,10 @@ jobs:
         shell: pwsh
         run: |
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
+          # Fix for TranslucentTB error
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
+          # Install AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
@@ -26,38 +28,45 @@ jobs:
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          
-          # Fast Download of the single big archive
+          # Download Speed Archive
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\
-          
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\Data.7z" -Force
           }
-          
-          # Instant Registry Restore
+          # Restore Reg Settings
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
-          if (Test-Path "C:\GamingVM\Backup\Translucent.reg") { reg import "C:\GamingVM\Backup\Translucent.reg" }
 
-      - name: 3. Connect AnyDesk
+      - name: 3. Connect AnyDesk & Stay Alive
         shell: pwsh
         run: |
+          # Set Password
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+          
+          # Get and Display ID
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
-          for ($i=0; $i -lt 15; $i++) {
+          $ID = ""
+          while (!$ID) {
             if (Test-Path $idFile) {
               $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
-              if ($ID) { Write-Host "ANYDESK_ID: $ID"; break }
             }
-            Start-Sleep -Seconds 5
+            if (!$ID) { Start-Sleep -Seconds 5 }
           }
+          
+          Write-Host "-------------------------------"
+          Write-Host "ANYDESK ID: $ID"
+          Write-Host "PASSWORD: GitHub@2026"
+          Write-Host "-------------------------------"
+          
+          # THE FIX: This loop keeps the VM alive for 24 hours (or until you stop it)
+          Write-Host "VM is now live. Connect now."
+          while ($true) { Start-Sleep -Seconds 3600 }
 
-      - name: 4. Final Safety Save (Guaranteed)
+      - name: 4. Final Safety Save
         if: always()
         shell: pwsh
         run: |
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-          # Create the single Speed-Archive
           7z a C:\Data.7z C:\GamingVM\* -y
           & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
