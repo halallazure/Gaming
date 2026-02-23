@@ -1,25 +1,34 @@
-name: Ultimate-Gaming-VM-V39
+name: Ultimate-Gaming-VM-V41-MAX-FPS
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. System Requirements
+      - name: 1. Unlock Maximum Performance
         shell: pwsh
         run: |
+          # Create folders
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
           New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
-          # Install Visual C++ (Required for most portable tools)
+          
+          # FORCE High Performance Power Plan for max CPU clock speed
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          
+          # Disable all Windows animations to free up CPU for 60 FPS
+          reg add "HKEY_CURRENT_USER\Control Panel\Desktop" /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f
+          
+          # Install Visual C++ (Required for smooth app rendering)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
+          
           # Install AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Restore & Dynamic Auto-Start
+      - name: 2. Restore & Boost FPS
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -33,19 +42,16 @@ jobs:
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            Remove-Item "C:\Data.7z" -Force
             
-            # --- DYNAMIC STARTUP ENGINE ---
-            # This launches EVERYTHING inside the Startup folder automatically
+            # Launch apps and force them to use "REALTIME" priority for 60 FPS
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
-                Write-Host "Launching: $($_.Name)"
-                Start-Process $_.FullName
+                $p = Start-Process $_.FullName -PassThru
+                $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
             }
           }
-          # Restore System Settings
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 3. Connection & 24h Loop
+      - name: 3. Connection & Stay Alive
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
@@ -57,12 +63,3 @@ jobs:
           }
           Write-Host "ANYDESK ID: $ID"
           while ($true) { Start-Sleep -Seconds 3600 }
-
-      - name: 4. Final Safety Sync
-        if: always()
-        shell: pwsh
-        run: |
-          $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
-          7z a C:\Data.7z C:\GamingVM\* -y
-          & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
