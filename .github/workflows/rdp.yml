@@ -5,21 +5,20 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install Apps & Fix Paths
+      - name: 1. Install Stable Apps
         shell: pwsh
         run: |
-          # 1. Create folders
+          # Create system folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # 2. Install Tools via Chocolatey (Stable)
+          # Force High Performance for 60 FPS
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+
+          # Install Tools via Chocolatey (Reliable Repo)
           choco install sunshine anydesk megacmd 7zip -y
 
-          # 3. CRITICAL: Force PowerShell to recognize MEGACMD path immediately
-          $env:Path += ";C:\AppData\Local\MEGAcmd;C:\Program Files\MEGAcmd"
-          [Environment]::SetEnvironmentVariable("Path", $env:Path, "Machine")
-
-      - name: 2. Unlock 60 FPS & Restore Data
+      - name: 2. Unlock 60 FPS & Restore Data (Fixed Paths)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -28,16 +27,19 @@ jobs:
           # Registry Hack for 60 FPS Smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Force Path refresh for this session
-          $env:Path += ";C:\AppData\Local\MEGAcmd;C:\Program Files\MEGAcmd;C:\Program Files (x86)\MEGAcmd"
+          # Use ABSOLUTE PATHS for MEGA to prevent "Not Recognized" error
+          $megaDir = "C:\Program Files\MEGAcmd"
+          if (!(Test-Path "$megaDir\mega-login.bat")) { $megaDir = "C:\Program Files (x86)\MEGAcmd" }
           
-          # Start MEGA Sync (Fixed Command)
-          mega-login "$env:M_USER" "$env:M_PASS"
-          mega-get /GamingVM/Data.7z C:\
+          Write-Host "Using MEGA from: $megaDir"
+          
+          # Start MEGA Sync
+          & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+          & "$megaDir\mega-get.bat" /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME Priority to stop wallpaper lag
+            # Set REALTIME Priority to fix laggy wallpaper
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
@@ -48,7 +50,8 @@ jobs:
         shell: pwsh
         run: |
           # Start AnyDesk with password
-          echo "GitHub@2026" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
+          $anydesk = "C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
+          echo "GitHub@2026" | & $anydesk --set-password
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           $ID = ""
           while (!$ID) {
