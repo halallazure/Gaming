@@ -8,49 +8,53 @@ jobs:
       - name: 1. Setup Environment & 4K Driver
         shell: pwsh
         run: |
-          # Create required folders silently
+          # Create folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # INSTALL 4K VIRTUAL DISPLAY (Robust Download)
+          # FORCE High Performance Power Plan
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+
+          # 4K VIRTUAL DISPLAY (Fixes 'Missing Encoder' in Sunshine)
           Write-Host "Downloading 4K Driver..."
-          try {
-              $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
-              curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
+          $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
+          curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
+          if ((Get-Item "C:\VDD\VDD.zip").Length -gt 100kb) {
               Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
               certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
               pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
-          } catch { 
-              Write-Host "Driver install skipped or failed, but continuing..." 
           }
-          
-          # Install Visual C++ (Required for Sunshine)
+
+          # Install Visual C++ (Critical for Sunshine rendering)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
 
       - name: 2. Install Sunshine & Apps
         shell: pwsh
         run: |
-          # Install Sunshine (Gaming Engine)
+          # Sunshine (Gaming Engine) - Using specific mirror to avoid corruption
+          Write-Host "Installing Sunshine..."
           curl.exe -L -o sunshine.exe https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe
-          Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
-          
-          # Install AnyDesk & MEGA
+          if ((Get-Item "sunshine.exe").Length -gt 10mb) {
+              Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
+          }
+
+          # AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 3. Restore & 60 FPS Priority
+      - name: 3. Unlock 60 FPS & Restore Data
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Unlock 60 FPS Registry
+          # 60 FPS Registry Unlock
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Start MEGA & Sync
+          # MEGA Sync
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           if (Test-Path "$m\MEGAcmdServer.exe") {
             Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
@@ -61,14 +65,15 @@ jobs:
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME priority for 60 FPS smoothness
+            # Set REALTIME Priority for 60 FPS smoothness
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
             }
           }
+          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Connection & Stay Alive
+      - name: 4. AnyDesk Connection
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
