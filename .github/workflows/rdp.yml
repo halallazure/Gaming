@@ -1,57 +1,46 @@
-name: Ultimate-Gaming-VM-V41-MAX-FPS
+name: Fixed-1080p-60FPS-Gaming-VM
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Setup Stable Environment & 4K Driver
+      - name: 1. Install Stable Apps (No Manual Downloads)
         shell: pwsh
         run: |
-          # 1. Create system folders
-          $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
+          # Create startup folders
+          $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # 2. Force High Performance for max CPU speed
+          # Force High Performance for 60 FPS
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-          # 3. USE CHOCOLATEY: Bypasses network blocks and prevents PowerShell crashes
+          # USE CHOCOLATEY: Bypasses network blocks that cause Exit Code 1
           choco install sunshine anydesk megacmd 7zip -y
 
-          # 4. Install 4K Virtual Monitor (Unlocks 60 FPS & Stops Lag)
-          Write-Host "Installing 4K Virtual Driver..."
-          $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
-          curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
-          if (Test-Path "C:\VDD\VDD.zip") {
-              Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
-              certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
-              pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
-          }
-
-      - name: 2. Unlock 60 FPS & Restore Data
+      - name: 2. Optimize for 1080p 60 FPS
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Registry Hack for Windows 60 FPS Smoothness
+          # Registry Hack for 60 FPS Smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Start MEGA & Sync
+          # Restore from MEGA
           mega-login $env:M_USER $env:M_PASS
           mega-get /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME Priority to fix laggy wallpaper
+            # Set REALTIME Priority to stop wallpaper lag
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
             }
           }
-          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 3. Final Connection
+      - name: 3. Connection & Stay Alive
         shell: pwsh
         run: |
           # Start AnyDesk with password
