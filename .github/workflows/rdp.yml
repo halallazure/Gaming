@@ -5,84 +5,52 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Setup Environment & 4K Driver
+      - name: 1. Setup Environment & Pro-grade Tools
         shell: pwsh
         run: |
-          # 1. Initialize Folders
+          # Create system folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # 2. Robust 4K Driver Install (Mirror 1 + Mirror 2)
-          Write-Host "Installing 4K Virtual Driver..."
+          # Use Chocolatey to install Sunshine and AnyDesk (Prevents "Not Found" errors)
+          choco install sunshine anydesk megacmd -y
+
+          # Robust 4K Driver Install (Using an alternate stable mirror)
+          Write-Host "Installing 4K Virtual Monitor..."
           $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
-          curl.exe -L -R -o "C:\VDD\VDD.zip" $vUrl
-          
-          if ((Get-Item "C:\VDD\VDD.zip").Length -gt 10kb) {
+          curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
+          if (Test-Path "C:\VDD\VDD.zip") {
               Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
               certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
               pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
-          } else {
-              Write-Error "4K Driver download failed. Check network."
-              exit 1
           }
 
-          # 3. Install VC++ Redistributable (Required for Sunshine)
-          curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
-          Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
-
-      - name: 2. Install Sunshine Engine & Apps
-        shell: pwsh
-        run: |
-          # 1. Install Sunshine (Gaming-Grade Protocol)
-          Write-Host "Downloading Sunshine..."
-          $sUrl = "https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe"
-          curl.exe -L -o sunshine.exe $sUrl
-          
-          if ((Get-Item "sunshine.exe").Length -gt 10mb) {
-              Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
-          } else {
-              Write-Error "Sunshine download corrupted."
-              exit 1
-          }
-
-          # 2. Install AnyDesk & MEGA
-          curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
-          curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-          Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
-          Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
-
-      - name: 3. Unlock 60 FPS & Restore Data
+      - name: 2. Unlock 60 FPS & Restore Data
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Unlock Windows 60 FPS cap
+          # Registry Hack for 60 FPS Smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Restore from MEGA
-          $m = "${env:LOCALAPPDATA}\MEGAcmd"
-          if (Test-Path "$m\MEGAcmdServer.exe") {
-            Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
-            Start-Sleep -Seconds 20
-            & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-            & "$m\mega-get.bat" /GamingVM/Data.7z C:\
-          }
+          # Start MEGA Sync
+          mega-login $env:M_USER $env:M_PASS
+          mega-get /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            # Force Startup Apps to REALTIME Priority for Zero-Lag
+            # Set REALTIME Priority for Zero-Lag (Wallpaper Fix)
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
             }
           }
-          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Final Connection
+      - name: 3. Final Connection
         shell: pwsh
         run: |
-          echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+          echo "GitHub@2026" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           $ID = ""
           while (!$ID) {
