@@ -5,42 +5,41 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Unlock Maximum Performance & 4K Driver
+      - name: 1. Setup 4K Environment & Sunshine
         shell: pwsh
         run: |
-          # Create folders
-          New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
-          New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
-          
-          # FORCE High Performance Power Plan
-          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          
-          # Install Visual C++ (Required for Sunshine)
-          curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
-          Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
-          
-          # INSTALL 4K VIRTUAL DISPLAY (Unlocks Sunshine Encoders)
-          curl -L -o VDD.zip https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip
-          Expand-Archive VDD.zip -DestinationPath C:\VDD
+          # Create System Folders
+          $paths = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
+          foreach ($p in $paths) { if (!(Test-Path $p)) { New-Item -Path $p -ItemType Directory -Force } }
+
+          # Install 4K Virtual Display Driver (The Fix for 'Missing Encoder')
+          Write-Host "Installing 4K Driver..."
+          curl.exe -L -o C:\VDD\VDD.zip https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip
+          Expand-Archive C:\VDD\VDD.zip -DestinationPath C:\VDD -Force
           certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
           pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
 
-      - name: 2. Install Sunshine & 60 FPS Hack
-        shell: pwsh
-        run: |
-          # Install Sunshine
-          curl -L -o sunshine.exe https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe
-          Start-Process -FilePath ".\sunshine.exe" -ArgumentList "/S" -Wait
-          
-          # Unlock 60 FPS Registry
-          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
+          # Install Sunshine (The 60 FPS Engine)
+          Write-Host "Installing Sunshine..."
+          curl.exe -L -o sunshine.exe https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe
+          Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
 
-      - name: 3. Restore Data & Boost Priority
+          # Install AnyDesk & MEGA (Your original requirements)
+          curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
+          curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+          Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
+          Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
+
+      - name: 2. Unlock 60 FPS & Restore Data
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
+          # Force 60 FPS Registry Hack
+          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
+          
+          # Start MEGA & Sync
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
@@ -49,17 +48,22 @@ jobs:
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            
-            # Launch apps and force them to use "REALTIME" priority for 60 FPS
+            # Set REALTIME priority for max smoothness
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
             }
           }
-          if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. AnyDesk Connection
+      - name: 3. Connection & Stay Alive
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          # The rest of your AnyDesk script...
+          $idFile = "C:\ProgramData\AnyDesk\system.conf"
+          $ID = ""
+          while (!$ID) {
+            if (Test-Path $idFile) { $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value } }
+            Start-Sleep -Seconds 5
+          }
+          Write-Host "ANYDESK ID: $ID"
+          while ($true) { Start-Sleep -Seconds 3600 }
