@@ -8,17 +8,17 @@ jobs:
       - name: 1. Setup Pro-Tools & 4K Driver
         shell: pwsh
         run: |
-          # Create folders
+          # Create folders correctly
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # Force High Performance
+          # Force High Performance for 60 FPS
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-          # USE CHOCOLATEY: Bypasses curl failures
+          # Use Chocolatey for stability (Prevents manual download crashes)
           choco install sunshine anydesk megacmd 7zip -y
 
-          # Install 4K Virtual Monitor (Stops laggy wallpaper)
+          # Robust 4K Driver Install (Fixes laggy wallpaper/encoder)
           $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
           curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
           if (Test-Path "C:\VDD\VDD.zip") {
@@ -33,16 +33,16 @@ jobs:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # 60 FPS Registry Fix
+          # Registry Hack for Windows 60 FPS smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Restore from MEGA
+          # Start MEGA Sync
           mega-login $env:M_USER $env:M_PASS
           mega-get /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME Priority for Zero-Lag
+            # Set REALTIME Priority for Zero-Lag (Wallpaper Fix)
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
@@ -53,7 +53,7 @@ jobs:
       - name: 3. Connection & Stay Alive
         shell: pwsh
         run: |
-          # AnyDesk Password Setup
+          # Start AnyDesk
           echo "GitHub@2026" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           $ID = ""
