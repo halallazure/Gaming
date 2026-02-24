@@ -8,28 +8,30 @@ jobs:
       - name: 1. Setup Environment & 4K Driver
         shell: pwsh
         run: |
-          # Create required folders
+          # Create required folders silently
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # INSTALL 4K VIRTUAL DISPLAY (Fixes the Sunshine 'Missing Encoder' error)
+          # INSTALL 4K VIRTUAL DISPLAY (Robust Download)
           Write-Host "Downloading 4K Driver..."
-          $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
-          Invoke-WebRequest -Uri $vUrl -OutFile "C:\VDD\VDD.zip"
-          Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
+          try {
+              $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
+              curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
+              Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
+              certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
+              pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
+          } catch { 
+              Write-Host "Driver install skipped or failed, but continuing..." 
+          }
           
-          # Force Install Driver Certificate and INF
-          certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
-          pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
-          
-          # Install Visual C++ (Required for Sunshine/AnyDesk)
+          # Install Visual C++ (Required for Sunshine)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
 
       - name: 2. Install Sunshine & Apps
         shell: pwsh
         run: |
-          # Download and Install Sunshine (Gaming Engine)
+          # Install Sunshine (Gaming Engine)
           curl.exe -L -o sunshine.exe https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe
           Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
           
@@ -45,10 +47,10 @@ jobs:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # 60 FPS Registry Unlock
+          # Unlock 60 FPS Registry
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Start MEGA Sync
+          # Start MEGA & Sync
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           if (Test-Path "$m\MEGAcmdServer.exe") {
             Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
@@ -59,7 +61,7 @@ jobs:
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            # Set Startup apps to REALTIME Priority for 60 FPS smoothness
+            # Set REALTIME priority for 60 FPS smoothness
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
