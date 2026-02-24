@@ -5,20 +5,20 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install Stable Apps
+      - name: 1. Install Tools via Chocolatey
         shell: pwsh
         run: |
-          # Create system folders
+          # 1. Create system folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # Force High Performance for 60 FPS
+          # 2. Force High Performance for 60 FPS
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-          # Install Tools via Chocolatey (Reliable Repo)
+          # 3. Install Sunshine, AnyDesk, MEGA, and 7-Zip
           choco install sunshine anydesk megacmd 7zip -y
 
-      - name: 2. Unlock 60 FPS & Restore Data (Fixed Paths)
+      - name: 2. Unlock 60 FPS & Restore Data (Verified Direct Paths)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -27,15 +27,12 @@ jobs:
           # Registry Hack for 60 FPS Smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Use ABSOLUTE PATHS for MEGA to prevent "Not Recognized" error
-          $megaDir = "C:\Program Files\MEGAcmd"
-          if (!(Test-Path "$megaDir\mega-login.bat")) { $megaDir = "C:\Program Files (x86)\MEGAcmd" }
+          # Force refresh of Path environment
+          $env:Path += ";C:\Program Files\MEGAcmd;C:\Program Files (x86)\MEGAcmd"
           
-          Write-Host "Using MEGA from: $megaDir"
-          
-          # Start MEGA Sync
-          & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          & "$megaDir\mega-get.bat" /GamingVM/Data.7z C:\
+          # DIRECT EXECUTION: Using the verified EXE names to prevent "Not Recognized" errors
+          mega-login.exe "$env:M_USER" "$env:M_PASS"
+          mega-get.exe /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
