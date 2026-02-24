@@ -5,18 +5,20 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Setup Environment & Pro-grade Tools
+      - name: 1. Setup Stable Environment & 4K Driver
         shell: pwsh
         run: |
           # Create system folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # Use Chocolatey to install Sunshine and AnyDesk (Prevents "Not Found" errors)
+          # Force High Performance for 60 FPS
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+
+          # Use Chocolatey to install Sunshine and AnyDesk (Prevents manual download crashes)
           choco install sunshine anydesk megacmd -y
 
-          # Robust 4K Driver Install (Using an alternate stable mirror)
-          Write-Host "Installing 4K Virtual Monitor..."
+          # Robust 4K Driver Install (Unlocks 60 FPS for Wallpaper)
           $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
           curl.exe -L -o "C:\VDD\VDD.zip" $vUrl
           if (Test-Path "C:\VDD\VDD.zip") {
@@ -31,16 +33,16 @@ jobs:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Registry Hack for 60 FPS Smoothness
+          # 60 FPS Registry Hack
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Start MEGA Sync
+          # Start MEGA & Sync
           mega-login $env:M_USER $env:M_PASS
           mega-get /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME Priority for Zero-Lag (Wallpaper Fix)
+            # Set REALTIME Priority for Zero-Lag wallpaper
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
@@ -50,6 +52,7 @@ jobs:
       - name: 3. Final Connection
         shell: pwsh
         run: |
+          # Start AnyDesk with password
           echo "GitHub@2026" | & "C:\Program Files (x86)\AnyDesk\AnyDesk.exe" --set-password
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           $ID = ""
