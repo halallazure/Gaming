@@ -5,44 +5,62 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install 4K Driver & Gaming Protocol (Sunshine)
+      - name: 1. Setup Environment & 4K Driver
         shell: pwsh
         run: |
-          # Create system folders
+          # 1. Initialize Folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # 1. INSTALL 4K VIRTUAL DISPLAY (Fixes 'Missing Encoder' & 'Laggy Wallpaper')
-          Write-Host "Installing 4K Virtual Monitor..."
-          curl.exe -L -o "C:\VDD\VDD.zip" https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip
-          Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
-          certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
-          pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
+          # 2. Robust 4K Driver Install (Mirror 1 + Mirror 2)
+          Write-Host "Installing 4K Virtual Driver..."
+          $vUrl = "https://github.com/itsmikethetech/Virtual-Display-Driver/releases/download/2.3/IddSampleDriver.zip"
+          curl.exe -L -R -o "C:\VDD\VDD.zip" $vUrl
+          
+          if ((Get-Item "C:\VDD\VDD.zip").Length -gt 10kb) {
+              Expand-Archive -Path "C:\VDD\VDD.zip" -DestinationPath "C:\VDD" -Force
+              certutil -addstore -f "TrustedPublisher" C:\VDD\IddSampleDriver.cer
+              pnputil /add-driver C:\VDD\IddSampleDriver.inf /install
+          } else {
+              Write-Error "4K Driver download failed. Check network."
+              exit 1
+          }
 
-          # 2. INSTALL SUNSHINE (Gaming-Grade Protocol for 60 FPS)
-          Write-Host "Installing Sunshine Engine..."
-          curl.exe -L -o sunshine.exe https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe
-          Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
+          # 3. Install VC++ Redistributable (Required for Sunshine)
+          curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
+          Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
 
-          # 3. INSTALL ANYDESK & MEGA
+      - name: 2. Install Sunshine Engine & Apps
+        shell: pwsh
+        run: |
+          # 1. Install Sunshine (Gaming-Grade Protocol)
+          Write-Host "Downloading Sunshine..."
+          $sUrl = "https://github.com/LizardByte/Sunshine/releases/latest/download/sunshine-windows-installer.exe"
+          curl.exe -L -o sunshine.exe $sUrl
+          
+          if ((Get-Item "sunshine.exe").Length -gt 10mb) {
+              Start-Process ./sunshine.exe -ArgumentList "/S" -Wait
+          } else {
+              Write-Error "Sunshine download corrupted."
+              exit 1
+          }
+
+          # 2. Install AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. Unlock 60 FPS & Restore Data
+      - name: 3. Unlock 60 FPS & Restore Data
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Force Max Performance Power Plan
-          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          
-          # 60 FPS Registry Unlock for Windows
+          # Unlock Windows 60 FPS cap
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Start MEGA Sync
+          # Restore from MEGA
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           if (Test-Path "$m\MEGAcmdServer.exe") {
             Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
@@ -51,9 +69,9 @@ jobs:
             & "$m\mega-get.bat" /GamingVM/Data.7z C:\
           }
           
-          # Restore Data & Set REALTIME Priority for Zero-Lag
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
+            # Force Startup Apps to REALTIME Priority for Zero-Lag
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
@@ -61,7 +79,7 @@ jobs:
           }
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 3. Connection & Stay Alive
+      - name: 4. Final Connection
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
@@ -71,6 +89,5 @@ jobs:
             if (Test-Path $idFile) { $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value } }
             Start-Sleep -Seconds 5
           }
-          Write-Host "ANYDESK ID: $ID"
-          # Keep VM alive for 6 hours
+          Write-Host "CONNECTION ID: $ID"
           while ($true) { Start-Sleep -Seconds 3600 }
