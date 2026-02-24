@@ -12,10 +12,10 @@ jobs:
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup", "C:\VDD"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # Force High Performance for 60 FPS
+          # Force High Performance for max CPU clock speed
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-          # Use Chocolatey for stability (Prevents manual download crashes)
+          # USE CHOCOLATEY: This is the most stable way to install apps on GitHub
           choco install sunshine anydesk megacmd 7zip -y
 
           # Robust 4K Driver Install (Unlocks 60 FPS for Wallpaper)
@@ -43,7 +43,8 @@ jobs:
           
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME Priority for Zero-Lag wallpaper
+            
+            # Set REALTIME Priority for Zero-Lag (Wallpaper Fix)
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
