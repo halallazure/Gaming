@@ -1,41 +1,37 @@
-name: Ultimate-Gaming-VM-MAX-FPS
+name: Ultimate-Gaming-VM-V41-MAX-FPS
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install Performance Tools
+      - name: 1. Install & Performance Setup
         shell: pwsh
         run: |
-          # Install Sunshine (for 60FPS), AnyDesk, and MEGA
+          # Install everything via Choco for stability
           choco install sunshine anydesk megacmd 7zip -y
           
-          # Force High Performance
+          # Force Max Performance
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          
-          # Create Folders
           New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
 
-      - name: 2. Restore Data (No-Path-Error Method)
+      - name: 2. Restore Data (Dynamic Path Fix)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Unlock 60 FPS in Registry
+          # Unlock 60 FPS
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # DYNAMIC SEARCH: Find MEGAcmd installation folder automatically
-          $megaPath = (Get-ChildItem -Path "C:\Program Files*\MEGAcmd" -Include "mega-login.exe" -Recurse -ErrorAction SilentlyContinue).FullName
-          if ($megaPath) {
-            $megaDir = Split-Path $megaPath
-            Write-Host "Found MEGA at: $megaDir"
-            & "$megaDir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
-            & "$megaDir\mega-get.exe" /GamingVM/Data.7z C:\
+          # Find MEGA reliably
+          $mega = (Get-ChildItem -Path "C:\Program Files*\MEGAcmd\mega-login.exe" -Recurse).FullName | Select-Object -First 1
+          if ($mega) {
+            $dir = Split-Path $mega
+            & "$dir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
+            & "$dir\mega-get.exe" /GamingVM/Data.7z C:\
           }
 
-          # Extract and set REALTIME Priority
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
@@ -44,28 +40,41 @@ jobs:
             }
           }
 
-      - name: 3. Connection & Force ID Display
+      - name: 3. Connection Setup (Service Refresh Method)
         shell: pwsh
         run: |
-          # Find AnyDesk Path automatically
-          $ad = (Get-Command anydesk.exe -ErrorAction SilentlyContinue).Source
-          if (!$ad) { $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe" }
+          $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
           
-          # Start Service and Set Password
+          # Ensure service is running
           Start-Process $ad -ArgumentList "--service"
           Start-Sleep -Seconds 10
           echo "GitHub@2026" | & $ad --set-password
           
-          # Force ID Generation
           Write-Host "--------------------------------"
-          for ($i=0; $i -lt 15; $i++) {
-            $val = & $ad --get-id
-            $cleanID = "$val".Trim()
-            if ($cleanID -match '^\d+$') {
-                Write-Host "YOUR ANYDESK ID IS: $cleanID"
+          Write-Host "WAITING FOR ANYDESK ID..."
+          
+          $idFile = "C:\ProgramData\AnyDesk\system.conf"
+          for ($i=0; $i -lt 20; $i++) {
+            # Try Method 1: CLI
+            $val = (& $ad --get-id)
+            
+            # Try Method 2: Config File
+            $fileVal = ""
+            if (Test-Path $idFile) {
+               $fileVal = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+            }
+            
+            $finalID = if ($val -match '^\d+$') { $val } else { $fileVal }
+            
+            if ($finalID -match '^\d+$') {
+                Write-Host "SUCCESS! YOUR ID IS: $finalID"
+                Write-Host "--------------------------------"
                 break
             }
+            
+            # If still no ID, poke the service to wake it up
+            & $ad --get-id
+            Write-Host "Still searching (Attempt $i)..."
             Start-Sleep -Seconds 5
           }
-          Write-Host "--------------------------------"
           while ($true) { Start-Sleep -Seconds 3600 }
