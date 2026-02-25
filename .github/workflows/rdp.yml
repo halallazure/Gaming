@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-V41-MAX-FPS
+name: Ultimate-Gaming-VM-MAX-FPS
 on: workflow_dispatch
 
 jobs:
@@ -8,10 +8,10 @@ jobs:
       - name: 1. Install & Performance Setup
         shell: pwsh
         run: |
-          # Install everything via Choco for stability
+          # Install everything via Choco
           choco install sunshine anydesk megacmd 7zip -y
           
-          # Force Max Performance
+          # Force Max Performance for 60 FPS
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
 
@@ -21,7 +21,7 @@ jobs:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Unlock 60 FPS
+          # Unlock 60 FPS Stream
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
           # Find MEGA reliably
@@ -40,41 +40,30 @@ jobs:
             }
           }
 
-      - name: 3. Connection Setup (Service Refresh Method)
+      - name: 3. Connection Setup (Portable Mode - Instant ID)
         shell: pwsh
         run: |
           $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
           
-          # Ensure service is running
-          Start-Process $ad -ArgumentList "--service"
-          Start-Sleep -Seconds 10
+          # Run AnyDesk in Portable Mode (No service required)
+          Start-Process $ad -ArgumentList "--set-password"
+          Start-Sleep -Seconds 5
           echo "GitHub@2026" | & $ad --set-password
           
           Write-Host "--------------------------------"
-          Write-Host "WAITING FOR ANYDESK ID..."
+          Write-Host "FETCHING PORTABLE ID..."
           
-          $idFile = "C:\ProgramData\AnyDesk\system.conf"
-          for ($i=0; $i -lt 20; $i++) {
-            # Try Method 1: CLI
-            $val = (& $ad --get-id)
-            
-            # Try Method 2: Config File
-            $fileVal = ""
-            if (Test-Path $idFile) {
-               $fileVal = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
-            }
-            
-            $finalID = if ($val -match '^\d+$') { $val } else { $fileVal }
-            
-            if ($finalID -match '^\d+$') {
-                Write-Host "SUCCESS! YOUR ID IS: $finalID"
+          # Force AnyDesk to foreground to generate ID
+          & $ad --get-id | Out-File -FilePath "id.txt"
+          
+          for ($i=0; $i -lt 15; $i++) {
+            $val = & $ad --get-id
+            if ($val -match '^\d+$') {
+                Write-Host "SUCCESS! YOUR ID IS: $val"
                 Write-Host "--------------------------------"
                 break
             }
-            
-            # If still no ID, poke the service to wake it up
-            & $ad --get-id
-            Write-Host "Still searching (Attempt $i)..."
+            Write-Host "Waiting for network (Attempt $i)..."
             Start-Sleep -Seconds 5
           }
           while ($true) { Start-Sleep -Seconds 3600 }
