@@ -1,37 +1,33 @@
-name: Ultimate-Gaming-VM-V41-MAX-FPS
+name: Ultimate-Gaming-VM-1080p-60FPS
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Performance Setup
+      - name: 1. Install Performance Tools
         shell: pwsh
         run: |
-          # Install Sunshine (for 60FPS) and AnyDesk
+          # Install Sunshine (for 60FPS) and AnyDesk via Choco
           choco install sunshine anydesk megacmd 7zip -y
           
-          # Force Max Performance
+          # Force Max Performance for 60 FPS
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-      - name: 2. Unlock 60 FPS & Sync Data
+      - name: 2. Unlock 60 FPS & Restore Data
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Registry Hack for 60 FPS Smoothness
+          # Registry Hack to unlock 60 FPS stream
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Find and Run MEGA (Fixes the "Not Recognized" error)
-          $megaCmd = (Get-Command mega-login.exe -ErrorAction SilentlyContinue).Source
-          if (!$megaCmd) { $megaCmd = (Get-ChildItem "C:\Program Files*\MEGAcmd\mega-login.exe" -Recurse).FullName }
-          if ($megaCmd) {
-            $megaDir = Split-Path $megaCmd
-            & "$megaDir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
-            & "$megaDir\mega-get.exe" /GamingVM/Data.7z C:\
-          }
-
+          # MEGAcmd Path Fix
+          $m = "C:\Program Files (x86)\MEGAcmd"
+          & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+          & "$m\mega-get.bat" /GamingVM/Data.7z C:\
+          
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
             # Set REALTIME Priority for smooth graphics
@@ -41,34 +37,25 @@ jobs:
             }
           }
 
-      - name: 3. NEW METHOD: Force ID to Console
+      - name: 3. Connection Setup (Fixed Line 44)
         shell: pwsh
         run: |
           $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
-          
-          # Start AnyDesk service
           Start-Process $ad -ArgumentList "--service"
           Start-Sleep -Seconds 10
           echo "GitHub@2026" | & $ad --set-password
           
-          Write-Host "--------------------------------"
-          Write-Host "REQUESTING ID DIRECTLY..."
-          
-          # METHOD 2: Direct CLI Fetch (Bypasses system.conf file check)
-          for ($i=0; $i -lt 10; $i++) {
-             $val = & $ad --get-id
-             if ($val) {
-                Write-Host "SUCCESS! YOUR ANYDESK ID IS: $val"
+          Write-Host "Fetching ID..."
+          # FIXED SYNTAX: Using a stable loop to capture ID output
+          for ($i=0; $i -lt 15; $i++) {
+            $val = & $ad --get-id
+            $cleanID = "$val".Trim()
+            if ($cleanID -match '^\d+$') {
+                Write-Host "--------------------------------"
+                Write-Host "SUCCESS! YOUR ANYDESK ID IS: $cleanID"
                 Write-Host "--------------------------------"
                 break
-             }
-             Write-Host "Waiting for network (Attempt $i)..."
-             Start-Sleep -Seconds 5
+            }
+            Start-Sleep -Seconds 5
           }
-          
-          # Safety check: print the file if it exists
-          if (Test-Path "C:\ProgramData\AnyDesk\system.conf") {
-             Get-Content "C:\ProgramData\AnyDesk\system.conf" | Select-String "ad.anynet.id"
-          }
-          
           while ($true) { Start-Sleep -Seconds 3600 }
