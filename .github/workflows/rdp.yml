@@ -5,33 +5,34 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install 60FPS Tools (No Errors)
+      - name: 1. Install Performance Tools
         shell: pwsh
         run: |
-          # Create folders
-          New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
-          New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
-          
-          # Force Max CPU Performance for 60 FPS
-          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          
-          # USE CHOCOLATEY: Prevents the "OperationStopped" crashes seen in your logs
+          # Install Sunshine (for 60FPS) and AnyDesk via Choco
           choco install sunshine anydesk megacmd 7zip -y
+          
+          # Force Max Performance
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-      - name: 2. Unlock 60 FPS & Sync Data
+      - name: 2. Unlock 60 FPS & Restore Data (Path Fix)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Registry Hack to unlock 60 FPS stream
+          # Registry Hack for 60 FPS
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Direct call to MEGAcmd (Bypasses path errors)
-          $m = "C:\Program Files (x86)\MEGAcmd"
-          & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          & "$m\mega-get.bat" /GamingVM/Data.7z C:\
+          # FIND MEGA DIRECTLY (Fixes the "Not Recognized" error)
+          $megaCmd = (Get-Command mega-login.exe -ErrorAction SilentlyContinue).Source
+          if (!$megaCmd) { $megaCmd = (Get-ChildItem "C:\Program Files*\MEGAcmd\mega-login.exe" -Recurse).FullName }
           
+          if ($megaCmd) {
+            $megaDir = Split-Path $megaCmd
+            & "$megaDir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
+            & "$megaDir\mega-get.exe" /GamingVM/Data.7z C:\
+          }
+
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
             # Set REALTIME Priority for smooth graphics
@@ -41,10 +42,10 @@ jobs:
             }
           }
 
-      - name: 3. Connection & ID Print
+      - name: 3. Connection & Stay Alive
         shell: pwsh
         run: |
-          # Use the path found in your logs to prevent "Not Recognized" error
+          # Use the verified AnyDesk path from your logs
           $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
           echo "GitHub@2026" | & $ad --set-password
           
@@ -55,6 +56,6 @@ jobs:
             Start-Sleep -Seconds 5
           }
           Write-Host "--------------------------------"
-          Write-Host "YOUR ANYDESK ID: $ID"
+          Write-Host "YOUR ANYDESK ID IS: $ID"
           Write-Host "--------------------------------"
           while ($true) { Start-Sleep -Seconds 3600 }
