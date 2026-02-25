@@ -3,7 +3,7 @@ on: workflow_dispatch
 
 jobs:
   build:
-    # [span_0](start_span)Using Windows 2022 for better driver support and virtualization stability[span_0](end_span)
+    # Upgraded to 2022 for superior virtualization and UI fluidity
     runs-on: windows-2022 
     timeout-minutes: 360
 
@@ -11,77 +11,86 @@ jobs:
     - name: 1. Core Performance & Runtime Injection
       shell: pwsh
       run: |
-        # [span_1](start_span)Create dedicated high-speed directories[span_1](end_span)
+        # Create dedicated high-speed directories
         New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
         
-        # [span_2](start_span)Install Visual C++ (Critical for smooth UI rendering and wallpapers)[span_2](end_span)
-        $vcUrl = "https://aka.ms/vs/17/release/vc_redist.x64.exe"
-        curl.exe -L -o vc_redist.x64.exe $vcUrl
+        # Install Visual C++ (Critical for smooth rendering & wallpapers)
+        Write-Host "Installing Visual C++ Runtimes..." -ForegroundColor Cyan
+        curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
         Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
         
-        # [span_3](start_span)Deploy AnyDesk with localized installation[span_3](end_span)
+        # Deploy AnyDesk
+        Write-Host "Deploying AnyDesk..." -ForegroundColor Cyan
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-        - name: 2. Registry & GPU Fluidity Tweaks
+    - name: 2. Registry & GPU Fluidity Tweaks
       shell: pwsh
       run: |
-        # 1. Disable Desktop Composition Redirection lag
-        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+        Write-Host "Applying GPU and Performance Tweaks..." -ForegroundColor Cyan
         
-        # 2. Force AnyDesk to 60FPS and DirectX mode
+        # Disable Desktop Composition Redirection lag (Fixes UI stutter)
+        & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+        
+        # Inject High-Performance settings into AnyDesk configuration
         $adConfig = "C:\ProgramData\AnyDesk\system.conf"
-        Start-Sleep -Seconds 5
+        Start-Sleep -Seconds 10
         if (Test-Path $adConfig) {
           Add-Content $adConfig "`nad.display.directx=1"
           Add-Content $adConfig "`nad.display.fps=60"
           Add-Content $adConfig "`nad.display.quality=1"
+          Write-Host "AnyDesk set to 60FPS DirectX Mode." -ForegroundColor Green
         }
         
-        # 3. Set High Performance Power Plan
-        powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        # Set High Performance Power Plan (Prevents CPU throttling)
+        & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
         
-        # 4. Compact OS (Fix for the ParserError)
+        # Compact OS to free up IOPS for live wallpapers
         & compact.exe /compactos:always
-
+        
+        # Turn off Hibernation to save disk space
+        & powercfg.exe -h off
 
     - name: 3. Credential Injection & ID Reveal
       shell: pwsh
       run: |
-        # [span_5](start_span)Set access password[span_5](end_span)
+        # Set access password
         echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
         
-        # [span_6](start_span)Dynamic ID extraction with retry logic[span_6](end_span)
+        # Dynamic ID extraction with robust retry logic
         $idFile = "C:\ProgramData\AnyDesk\system.conf"
         $ID = ""
         $attempts = 0
-        while (!$ID -and $attempts -lt 12) {
+        while (!$ID -and $attempts -lt 15) {
           if (Test-Path $idFile) { 
             $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value } 
           }
-          Start-Sleep -Seconds 5
-          $attempts++
+          if (!$ID) { Start-Sleep -Seconds 5; $attempts++ }
         }
         
-        Write-Host "====================================" -ForegroundColor Cyan
-        Write-Host " PERFORMANCE RDP ACTIVE " -ForegroundColor Green
+        Write-Host "================================================" -ForegroundColor Cyan
+        Write-Host " ACCESS GRANTED - PERFORMANCE MODE ACTIVE " -ForegroundColor Green -BackgroundColor Black
         Write-Host " ANYDESK ID: $ID" -ForegroundColor Yellow
         Write-Host " PASSWORD:    GitHub@2026" -ForegroundColor White
-        Write-Host " TARGET:      1080p @ 60 FPS" -ForegroundColor Green
-        Write-Host "====================================" -ForegroundColor Cyan
+        Write-Host " RESOLUTION:  1080p @ 60 FPS (Minimum)" -ForegroundColor Green
+        Write-Host "================================================" -ForegroundColor Cyan
 
     - name: 4. The Infinite Ultra-Loop
       shell: pwsh
       run: |
-        # [span_7](start_span)Keep alive for 6 hours[span_7](end_span)
-        while ($true) { 
-          Write-Host "Heartbeat: VM is running smoothly..."
-          Start-Sleep -Seconds 3600 
+        Write-Host "VM is now live. Keep this browser tab open." -ForegroundColor Cyan
+        $timeout = New-TimeSpan -Hours 6
+        $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+        while ($stopwatch.Elapsed -lt $timeout) {
+          $timeLeft = $timeout - $stopwatch.Elapsed
+          Write-Host "Session active. Time remaining: $($timeLeft.ToString('hh\:mm\:ss'))"
+          Start-Sleep -Seconds 60
         }
 
     - name: 5. Final Safety Sync
       if: always()
       shell: pwsh
       run: |
-        # [span_8](start_span)Backup system registry for next session[span_8](end_span)
-        reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
+        Write-Host "Backing up session settings..." -ForegroundColor Cyan
+        # Backup system registry for next session
+        & reg.exe export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
