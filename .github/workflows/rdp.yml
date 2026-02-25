@@ -1,0 +1,66 @@
+name: Final-Smooth-1080p-60FPS
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: 1. Install Performance Tools
+        shell: pwsh
+        run: |
+          # Install Sunshine (for 60FPS) and AnyDesk via Choco
+          choco install sunshine anydesk megacmd 7zip -y
+          
+          # Force Max Performance
+          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+
+      - name: 2. Unlock 60 FPS & Restore Data
+        shell: pwsh
+        env:
+          M_USER: ${{ secrets.MEGA_EMAIL }}
+          M_PASS: ${{ secrets.MEGA_PASSWORD }}
+        run: |
+          # Registry Hack for 60 FPS Smoothness
+          reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
+          
+          # Use EXE directly to avoid "Not Recognized" errors
+          $megaCmd = (Get-Command mega-login.exe -ErrorAction SilentlyContinue).Source
+          if ($megaCmd) {
+            $megaDir = Split-Path $megaCmd
+            & "$megaDir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
+            & "$megaDir\mega-get.exe" /GamingVM/Data.7z C:\
+          }
+
+          if (Test-Path "C:\Data.7z") {
+            & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
+            # Set REALTIME Priority for smooth graphics
+            Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
+                $p = Start-Process $_.FullName -PassThru
+                $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
+            }
+          }
+
+      - name: 3. FORCE-FETCH ANYDESK ID (FIXED SYNTAX)
+        shell: pwsh
+        run: |
+          $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
+          # FIXED SYNTAX: Passing arguments correctly to avoid positional parameter error
+          Start-Process $ad -ArgumentList "--service"
+          Start-Sleep -Seconds 8
+          echo "GitHub@2026" | & $ad --set-password
+          
+          $idFile = "C:\ProgramData\AnyDesk\system.conf"
+          Write-Host "Searching for ID..."
+          for ($i=0; $i -lt 15; $i++) {
+            if (Test-Path $idFile) {
+              $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+              if ($ID) { 
+                Write-Host "--------------------------------"
+                Write-Host "SUCCESS! YOUR ANYDESK ID IS: $ID"
+                Write-Host "--------------------------------"
+                break 
+              }
+            }
+            Start-Sleep -Seconds 5
+          }
+          while ($true) { Start-Sleep -Seconds 3600 }
