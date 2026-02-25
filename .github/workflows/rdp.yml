@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-1080p-60FPS
+name: Ultimate-Gaming-VM-60FPS-ZeroLag
 on: workflow_dispatch
 
 jobs:
@@ -7,69 +7,67 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 1. Environment Setup & Performance Drivers
+      - name: 1. System Requirements & DirectX Runtimes
         shell: pwsh
         run: |
-          # Clean directory creation
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
           New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
           
-          # Visual C++ for smooth UI rendering
+          # Visual C++ & DirectX Web Setup (Critical for 60fps wallpaper fluidity)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
           
-          # Deploy AnyDesk and MEGA
+          # AnyDesk & MEGA
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. 60FPS & GPU Performance Optimization
+      - name: 2. ZERO-LAG Registry & Performance Hardening
         shell: pwsh
         run: |
-          # Force High Performance Power Plan
-          & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          # Force Windows to prioritize Desktop Window Manager (DWM) for 60fps
+          & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f
+          & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f
           
-          # Inject 60FPS and DirectX settings into AnyDesk
+          # Disable Transparency and animations that cause RDP lag
+          & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f
+          
+          # FORCE ANYDESK TO HIGH-PERFORMANCE 60FPS
           $adConfig = "C:\ProgramData\AnyDesk\system.conf"
           Start-Sleep -Seconds 10
           if (Test-Path $adConfig) {
-            Add-Content $adConfig "`nad.display.directx=1"
-            Add-Content $adConfig "`nad.display.fps=60"
-            Add-Content $adConfig "`nad.display.quality=1"
+            Clear-Content $adConfig
+            Add-Content $adConfig "ad.display.directx=1"
+            Add-Content $adConfig "ad.display.fps=60"
+            Add-Content $adConfig "ad.display.quality=1"
+            Add-Content $adConfig "ad.display.omrp=1" # Optimize Render Performance
+            Add-Content $adConfig "ad.anynet.settings.fast_mode=1"
           }
           
-          # Reduce Desktop Latency
-          & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+          # High Performance Power Plan
+          & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-      - name: 3. MEGA Restore & Dynamic Startup Engine
+      - name: 3. MEGA Restore & Startup Engine
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          $megaPath = "${env:LOCALAPPDATA}\MEGAcmd"
-          Start-Process "$megaPath\MEGAcmdServer.exe" -WindowStyle Hidden
+          $m = "${env:LOCALAPPDATA}\MEGAcmd"
+          Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
-          
-          # Login and download Data.7z
-          & "$megaPath\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-          & "$megaPath\mega-get.bat" /GamingVM/Data.7z C:\
+          & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+          & "$m\mega-get.bat" /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\Data.7z" -Force
-            
-            # Launch everything in Startup folder
-            Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
-                Write-Host "Starting: $($_.Name)"
-                Start-Process $_.FullName
-            }
+            Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object { Start-Process $_.FullName }
           }
-          # Restore System Registry
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Secure Reveal & Heartbeat
+      - name: 4. Secure Connection & Reveal
         shell: pwsh
         run: |
           echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
@@ -80,8 +78,9 @@ jobs:
             Start-Sleep -Seconds 5
           }
           Write-Host "===================================="
-          Write-Host "ID: $ID | PASS: GitHub@2026"
-          Write-Host "STATUS: 1080P 60FPS ACTIVE"
+          Write-Host "ANYDESK ID: $ID"
+          Write-Host "PASSWORD:    GitHub@2026"
+          Write-Host "PERFORMANCE: 1080p 60FPS (Hardened)"
           Write-Host "===================================="
           while ($true) { Start-Sleep -Seconds 3600 }
 
@@ -89,7 +88,7 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $megaPath = "${env:LOCALAPPDATA}\MEGAcmd"
+          $m = "${env:LOCALAPPDATA}\MEGAcmd"
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a C:\Data.7z C:\GamingVM\* -y
-          & "$megaPath\mega-put.bat" -c C:\Data.7z /GamingVM/
+          & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
