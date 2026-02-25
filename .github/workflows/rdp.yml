@@ -3,34 +3,34 @@ on: workflow_dispatch
 
 jobs:
   build:
-    # Upgraded to 2022 for better virtualization & UI fluidity
     runs-on: windows-2022 
     timeout-minutes: 360
 
     steps:
-      - name: 1. System Requirements & Performance Drivers
+      - name: 1. Environment Setup & Performance Drivers
         shell: pwsh
         run: |
-          [span_0](start_span)New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force[span_0](end_span)
-          [span_1](start_span)New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force[span_1](end_span)
+          # Clean directory creation
+          New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
+          New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
           
-          # Install Visual C++ (Critical for 60fps UI and Gaming tools)
+          # Visual C++ for smooth UI rendering
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
           
-          # [span_2](start_span)Install AnyDesk & MEGA[span_2](end_span)
-          [span_3](start_span)curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe[span_3](end_span)
-          [span_4](start_span)curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe[span_4](end_span)
-          [span_5](start_span)Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait[span_5](end_span)
-          [span_6](start_span)Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait[span_6](end_span)
+          # Deploy AnyDesk and MEGA
+          curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
+          curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
+          Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
+          Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-      - name: 2. 60FPS & GPU Performance Injection
+      - name: 2. 60FPS & GPU Performance Optimization
         shell: pwsh
         run: |
-          # Disable Desktop Composition Redirection lag (Fixes stuttering)
-          & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+          # Force High Performance Power Plan
+          & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           
-          # Force AnyDesk to 60FPS and DirectX Hardware Acceleration
+          # Inject 60FPS and DirectX settings into AnyDesk
           $adConfig = "C:\ProgramData\AnyDesk\system.conf"
           Start-Sleep -Seconds 10
           if (Test-Path $adConfig) {
@@ -39,59 +39,57 @@ jobs:
             Add-Content $adConfig "`nad.display.quality=1"
           }
           
-          # Force High Performance Power Plan to prevent CPU throttling
-          & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          & compact.exe /compactos:always
+          # Reduce Desktop Latency
+          & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
 
-      - name: 3. MEGA Restore & Dynamic Auto-Start
+      - name: 3. MEGA Restore & Dynamic Startup Engine
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          [span_7](start_span)$m = "${env:LOCALAPPDATA}\MEGAcmd"[span_7](end_span)
-          [span_8](start_span)Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden[span_8](end_span)
+          $megaPath = "${env:LOCALAPPDATA}\MEGAcmd"
+          Start-Process "$megaPath\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
-          [span_9](start_span)& "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"[span_9](end_span)
-          [span_10](start_span)& "$m\mega-get.bat" /GamingVM/Data.7z C:\[span_10](end_span)
+          
+          # Login and download Data.7z
+          & "$megaPath\mega-login.bat" "$env:M_USER" "$env:M_PASS"
+          & "$megaPath\mega-get.bat" /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
-            [span_11](start_span)7z x C:\Data.7z -oC:\GamingVM\ -y[span_11](end_span)
-            [span_12](start_span)Remove-Item "C:\Data.7z" -Force[span_12](end_span)
+            7z x C:\Data.7z -oC:\GamingVM\ -y
+            Remove-Item "C:\Data.7z" -Force
             
-            # -[span_13](start_span)-- DYNAMIC STARTUP ENGINE ---[span_13](end_span)
+            # Launch everything in Startup folder
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
-                Write-Host "Launching: $($_.Name)"
+                Write-Host "Starting: $($_.Name)"
                 Start-Process $_.FullName
             }
           }
-          # [span_14](start_span)Restore System Settings[span_14](end_span)
+          # Restore System Registry
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Secure Connection & Reveal
+      - name: 4. Secure Reveal & Heartbeat
         shell: pwsh
         run: |
-          echo "GitHub@2026" | [span_15](start_span)& "C:\AnyDesk\AnyDesk.exe" --set-password[span_15](end_span)
-          [span_16](start_span)$idFile = "C:\ProgramData\AnyDesk\system.conf"[span_16](end_span)
+          echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+          $idFile = "C:\ProgramData\AnyDesk\system.conf"
           $ID = ""
           while (!$ID) {
-            if (Test-Path $idFile) { $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | [span_17](start_span)% { $_.Matches.Groups[1].Value } }[span_17](end_span)
+            if (Test-Path $idFile) { $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value } }
             Start-Sleep -Seconds 5
           }
-          Write-Host "====================================" -ForegroundColor Green
-          Write-Host " PERFORMANCE 60FPS VM IS READY" -ForegroundColor Cyan
-          Write-Host " ANYDESK ID: $ID" -ForegroundColor Yellow
-          Write-Host " PASSWORD:    GitHub@2026" -ForegroundColor White
-          Write-Host "====================================" -ForegroundColor Green
-          
-          # [span_18](start_span)Keep Alive Loop[span_18](end_span)
-          [span_19](start_span)while ($true) { Start-Sleep -Seconds 3600 }[span_19](end_span)
+          Write-Host "===================================="
+          Write-Host "ID: $ID | PASS: GitHub@2026"
+          Write-Host "STATUS: 1080P 60FPS ACTIVE"
+          Write-Host "===================================="
+          while ($true) { Start-Sleep -Seconds 3600 }
 
-      - name: 5. Final MEGA Safety Sync
+      - name: 5. Final Safety Sync
         if: always()
         shell: pwsh
         run: |
-          [span_20](start_span)$m = "${env:LOCALAPPDATA}\MEGAcmd"[span_20](end_span)
-          [span_21](start_span)reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y[span_21](end_span)
-          [span_22](start_span)7z a C:\Data.7z C:\GamingVM\* -y[span_22](end_span)
-          [span_23](start_span)& "$m\mega-put.bat" -c C:\Data.7z /GamingVM/[span_23](end_span)
+          $megaPath = "${env:LOCALAPPDATA}\MEGAcmd"
+          reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
+          7z a C:\Data.7z C:\GamingVM\* -y
+          & "$megaPath\mega-put.bat" -c C:\Data.7z /GamingVM/
