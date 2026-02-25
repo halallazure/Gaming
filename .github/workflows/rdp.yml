@@ -20,13 +20,11 @@ jobs:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Registry Hack for 60 FPS
+          # Registry Hack for 60 FPS Smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Dynamic Path Finder for MEGA (Fixes "Not Recognized" error)
+          # Use EXE directly to avoid "Not Recognized" errors
           $megaCmd = (Get-Command mega-login.exe -ErrorAction SilentlyContinue).Source
-          if (!$megaCmd) { $megaCmd = (Get-ChildItem "C:\Program Files*\MEGAcmd\mega-login.exe" -Recurse).FullName }
-          
           if ($megaCmd) {
             $megaDir = Split-Path $megaCmd
             & "$megaDir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
@@ -42,20 +40,18 @@ jobs:
             }
           }
 
-      - name: 3. Connection Setup (Force ID Generation)
+      - name: 3. Connection Setup (Fixed TASKKILL & ID Fetch)
         shell: pwsh
         run: |
           $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
           
-          # Kill any stuck AnyDesk processes and restart as a fresh service
-          taskkill /F /IM AnyDesk.exe /T /ErrorAction SilentlyContinue
+          # FIXED TASKKILL: Using try/catch instead of invalid flags to prevent crashes
+          try { taskkill /F /IM AnyDesk.exe /T } catch { Write-Host "AnyDesk not running, starting now..." }
+          
           Start-Process $ad -ArgumentList "--service"
           Start-Sleep -Seconds 10
-          
-          # Set Password
           echo "GitHub@2026" | & $ad --set-password
           
-          # ID Fetch Loop with Service Refresh
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
           Write-Host "Searching for ID..."
           for ($i=0; $i -lt 20; $i++) {
@@ -68,8 +64,8 @@ jobs:
                 break 
               }
             }
-            # Every 5 attempts, try to poke the service to generate the ID
-            if ($i % 5 -eq 0) { Start-Process $ad -ArgumentList "--get-id" }
+            # Force the app to refresh the ID if it's missing
+            & $ad --get-id
             Start-Sleep -Seconds 5
           }
           while ($true) { Start-Sleep -Seconds 3600 }
