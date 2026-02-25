@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-RustDesk-v4
+name: Ultimate-Gaming-VM-RustDesk-FINAL
 on: workflow_dispatch
 
 jobs:
@@ -7,32 +7,36 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 1. Setup & Silent Installers
+      - name: 1. Setup & High-Speed Runtimes
         shell: pwsh
         run: |
+          # Create Directories for your MEGA data
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
           foreach ($dir in $dirs) { if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force } }
           
-          # Visual C++
+          # Install Visual C++ (Silent) - Fixes wallpaper lag
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install", "/quiet", "/norestart" -Wait
           
-          # MEGAcmd
+          # Install MEGAcmd (Silent)
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           
-          # RustDesk - Using a shorter name for the local copy
-          curl.exe -L -o rd.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
-          Start-Process ./rd.exe -ArgumentList "--install"
+          # Download RustDesk (Using the specific version that supports CLI commands)
+          curl.exe -L -o rustdesk.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
 
-      - name: 2. 60FPS Performance Tweaks
+      - name: 2. 60FPS Hardening & Latency Fix
         shell: pwsh
         run: |
+          # Set High Performance Power Plan
           & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          
+          # Registry hacks for smooth 60fps rendering
           & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f
           & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+          & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f
 
-      - name: 3. MEGA Sync & Startup
+      - name: 3. MEGA Restore & Dynamic Startup
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -41,35 +45,38 @@ jobs:
           $m = "${env:LOCALAPPDATA}\MEGAcmd"
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
+          
+          # Login and download your 7z data
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\
+          
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
             Remove-Item "C:\Data.7z" -Force
+            # Run everything in your Startup folder
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object { Start-Process $_.FullName }
           }
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Secure Connection (Flexible Path)
+      - name: 4. Launch RustDesk (Bypass Admin Error)
         shell: pwsh
         run: |
-          # Wait for installation to settle
-          Start-Sleep -Seconds 30
+          # Start RustDesk in the background WITHOUT the installer
+          Start-Process ./rustdesk.exe -ArgumentList "--service"
+          Start-Sleep -Seconds 10
           
-          # Try to find RustDesk in multiple locations
-          $rdPath = "C:\Program Files\RustDesk\rustdesk.exe"
-          if (!(Test-Path $rdPath)) { $rdPath = "$PWD\rd.exe" }
+          # Set the password
+          & ./rustdesk.exe --password "GitHub@2026"
           
-          Write-Host "Using RustDesk at: $rdPath"
-          
-          # Set Password and Reveal ID
-          & $rdPath --password "GitHub@2026"
-          $ID = & $rdPath --get-id
+          # Retrieve ID
+          $ID = & ./rustdesk.exe --get-id
           
           Write-Host "===================================="
           Write-Host " RUSTDESK ID: $ID"
           Write-Host " PASSWORD:    GitHub@2026"
+          Write-Host " STATUS:      60FPS MODE ENABLED"
           Write-Host "===================================="
+          
           while ($true) { Start-Sleep -Seconds 3600 }
 
       - name: 5. Backup Sync
