@@ -23,8 +23,9 @@ jobs:
           # Registry Hack for 60 FPS Smoothness
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Use EXE directly to avoid "Not Recognized" errors
+          # Find and Run MEGA (Fixes the "Not Recognized" error)
           $megaCmd = (Get-Command mega-login.exe -ErrorAction SilentlyContinue).Source
+          if (!$megaCmd) { $megaCmd = (Get-ChildItem "C:\Program Files*\MEGAcmd\mega-login.exe" -Recurse).FullName }
           if ($megaCmd) {
             $megaDir = Split-Path $megaCmd
             & "$megaDir\mega-login.exe" "$env:M_USER" "$env:M_PASS"
@@ -40,21 +41,22 @@ jobs:
             }
           }
 
-      - name: 3. Connection Setup (Fixed TASKKILL & ID Fetch)
+      - name: 3. Connection Setup (Silent Error Handling)
         shell: pwsh
         run: |
           $ad = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
           
-          # FIXED TASKKILL: Using try/catch instead of invalid flags to prevent crashes
-          try { taskkill /F /IM AnyDesk.exe /T } catch { Write-Host "AnyDesk not running, starting now..." }
-          
+          # Start AnyDesk without generating "Process not found" errors
           Start-Process $ad -ArgumentList "--service"
           Start-Sleep -Seconds 10
           echo "GitHub@2026" | & $ad --set-password
           
+          # FORCE-FETCH ID: This will print your ID in the log
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
-          Write-Host "Searching for ID..."
+          Write-Host "Fetching your ID..."
           for ($i=0; $i -lt 20; $i++) {
+            # Poke the ID generator
+            & $ad --get-id
             if (Test-Path $idFile) {
               $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
               if ($ID) { 
@@ -64,8 +66,6 @@ jobs:
                 break 
               }
             }
-            # Force the app to refresh the ID if it's missing
-            & $ad --get-id
             Start-Sleep -Seconds 5
           }
           while ($true) { Start-Sleep -Seconds 3600 }
