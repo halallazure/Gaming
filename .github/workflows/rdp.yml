@@ -1,70 +1,43 @@
-name: Smooth-1080p-60FPS-Final
+name: Final-Smooth-1080p-60FPS
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install Apps & Setup Performance
+      - name: 1. Install & Fast-Setup
         shell: pwsh
         run: |
-          # 1. Create system folders
-          $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
-          foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
-
-          # 2. Force Max Performance Power Plan
+          # Install everything including Sunshine for 60FPS
+          choco install sunshine anydesk 7zip -y
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-          # 3. Install Sunshine, AnyDesk, MEGAcmd, and 7-Zip
-          choco install sunshine anydesk megacmd 7zip -y
-
-      - name: 2. Unlock 60 FPS & Restore Data (Auto-Path Fix)
+      - name: 2. Registry & AnyDesk ID Fix
         shell: pwsh
-        env:
-          M_USER: ${{ secrets.MEGA_EMAIL }}
-          M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # 60 FPS Registry Hack
+          # Unlock 60 FPS
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # AUTO-LOCATE MEGA: Finds the path regardless of where Choco put it
-          $megaCmd = (Get-Command mega-login.exe -ErrorAction SilentlyContinue).Source
-          if (!$megaCmd) { $megaCmd = (Get-ChildItem "C:\Program Files*\MEGAcmd\mega-login.bat" -Recurse).FullName }
+          # Force AnyDesk to start and generate ID immediately
+          $anydesk = "C:\ProgramData\Chocolatey\bin\AnyDesk.exe"
+          Start-Process $anydesk --ArgumentList "--service"
+          Start-Sleep -Seconds 5
+          echo "GitHub@2026" | & $anydesk --set-password
           
-          if ($megaCmd) {
-            Write-Host "MEGA found at: $megaCmd"
-            $megaDir = Split-Path $megaCmd
-            & "$megaDir\mega-login.bat" "$env:M_USER" "$env:M_PASS"
-            & "$megaDir\mega-get.bat" /GamingVM/Data.7z C:\
-          }
-
-          # Restore Data & Set Realtime Priority
-          if (Test-Path "C:\Data.7z") {
-            & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
-            Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
-                $p = Start-Process $_.FullName -PassThru
-                $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
-            }
-          }
-
-      - name: 3. Connection Setup (Auto-Path Fix)
-        shell: pwsh
-        run: |
-          # AUTO-LOCATE ANYDESK: Prevents "Not Recognized" error
-          $anydeskPath = (Get-Command anydesk.exe -ErrorAction SilentlyContinue).Source
-          if (!$anydeskPath) { $anydeskPath = (Get-ChildItem "C:\Program Files*\AnyDesk\AnyDesk.exe" -Recurse).FullName }
-          
-          if ($anydeskPath) {
-            Write-Host "AnyDesk found at: $anydeskPath"
-            echo "GitHub@2026" | & $anydeskPath --set-password
-          }
-
-          # Get ID and Stay Alive
+          # CLEAR ID FETCH: This will print your ID in the log
           $idFile = "C:\ProgramData\AnyDesk\system.conf"
-          $ID = ""
-          while (!$ID) {
-            if (Test-Path $idFile) { $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value } }
+          for ($i=0; $i -lt 10; $i++) {
+            if (Test-Path $idFile) {
+              $ID = Select-String -Path $idFile -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+              if ($ID) { 
+                Write-Host "--------------------------------"
+                Write-Host "YOUR ANYDESK ID IS: $ID"
+                Write-Host "--------------------------------"
+                break 
+              }
+            }
             Start-Sleep -Seconds 5
           }
-          Write-Host "SUCCESS! CONNECTION ID: $ID"
+          
+          # Keep the VM alive
           while ($true) { Start-Sleep -Seconds 3600 }
