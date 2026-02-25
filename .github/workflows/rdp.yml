@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-RustDesk-60FPS
+name: Ultimate-Gaming-VM-RustDesk-PRO
 on: workflow_dispatch
 
 jobs:
@@ -10,31 +10,34 @@ jobs:
       - name: 1. Setup Performance Environment
         shell: pwsh
         run: |
-          New-Item -Path "C:\GamingVM\Backup", "C:\GamingVM\Startup" -ItemType Directory -Force
+          # [span_0](start_span)Create Directories[span_0](end_span)
+          $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
+          foreach ($dir in $dirs) { if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force } }
           
-          # Visual C++ & DirectX (Essential for 60fps fluidity)
+          # Visual C++ (Silent Install)
+          Write-Host "Installing Visual C++..."
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
-          Start-Process ./vc_redist.x64.exe -ArgumentList "/install /quiet /norestart" -Wait
+          Start-Process ./vc_redist.x64.exe -ArgumentList "/install", "/quiet", "/norestart" -Wait
           
-          # Install RustDesk (Faster than AnyDesk) & MEGA
-          curl.exe -L -o rustdesk.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
+          # MEGAcmd (Silent Install)
+          Write-Host "Installing MEGAcmd..."
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           
-          # Install RustDesk as a service
+          # RustDesk (Direct Binary Deployment to avoid hang)
+          Write-Host "Deploying RustDesk..."
+          curl.exe -L -o rustdesk.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
+          # Install as service and move on immediately
           Start-Process ./rustdesk.exe -ArgumentList "--install" -Wait
 
-      - name: 2. Zero-Lag Registry & OS Hardening
+      - name: 2. Zero-Lag 60FPS Hardening
         shell: pwsh
         run: |
-          # Force High Performance Power Plan
+          # Set High Performance Power Plan
           & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           
-          # Prioritize GPU for Desktop Window Manager (DWM)
+          # GPU Priority Tweaks
           & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f
-          & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "Priority" /t REG_DWORD /d 6 /f
-          
-          # Disable Animations & Transparency to reduce bandwidth lag
           & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
           & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f
 
@@ -48,39 +51,44 @@ jobs:
           Start-Process "$m\MEGAcmdServer.exe" -WindowStyle Hidden
           Start-Sleep -Seconds 30
           
+          # [span_1](start_span)Login and download Data.7z[span_1](end_span)
           & "$m\mega-login.bat" "$env:M_USER" "$env:M_PASS"
           & "$m\mega-get.bat" /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             7z x C:\Data.7z -oC:\GamingVM\ -y
-            Remove-Item "C:\Data.7z" -Force
-            # Launch all tools in Startup folder
-            Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object { Start-Process $_.FullName }
+            [span_2](start_span)Remove-Item "C:\Data.7z" -Force #[span_2](end_span)
+            
+            # [span_3](start_span)Dynamic Startup Engine[span_3](end_span)
+            Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
+                [span_4](start_span)Write-Host "Launching: $($_.Name)" #[span_4](end_span)
+                Start-Process $_.FullName
+            }
           }
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Secure Reveal & 60FPS Heartbeat
+      - name: 4. Secure Connection Reveal
         shell: pwsh
         run: |
           # Set RustDesk Password
           & "C:\Program Files\RustDesk\rustdesk.exe" --password "GitHub@2026"
           
-          # Get RustDesk ID
+          # [span_5](start_span)Get ID[span_5](end_span)
           $ID = & "C:\Program Files\RustDesk\rustdesk.exe" --get-id
           
-          Write-Host "================================================" -ForegroundColor Cyan
-          Write-Host " RUSTDESK IS READY (SURPASSES ANYDESK LAG) " -ForegroundColor Green
-          Write-Host " ID: $ID" -ForegroundColor Yellow
-          Write-Host " PASSWORD: GitHub@2026" -ForegroundColor White
-          Write-Host "================================================" -ForegroundColor Cyan
+          Write-Host "===================================="
+          Write-Host "RUSTDESK ID: $ID"
+          Write-Host "PASSWORD:    GitHub@2026"
+          Write-Host "===================================="
           
+          # [span_6](start_span)Keep Alive[span_6](end_span)
           while ($true) { Start-Sleep -Seconds 3600 }
 
       - name: 5. Final Safety Sync
         if: always()
         shell: pwsh
         run: |
-          $m = "${env:LOCALAPPDATA}\MEGAcmd"
+          [span_7](start_span)$m = "${env:LOCALAPPDATA}\MEGAcmd" #[span_7](end_span)
           reg export "HKEY_CURRENT_USER\Control Panel\Desktop" "C:\GamingVM\Backup\System.reg" /y
           7z a C:\Data.7z C:\GamingVM\* -y
           & "$m\mega-put.bat" -c C:\Data.7z /GamingVM/
