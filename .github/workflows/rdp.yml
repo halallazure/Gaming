@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-RustDesk-v3
+name: Ultimate-Gaming-VM-RustDesk-v4
 on: workflow_dispatch
 
 jobs:
@@ -7,7 +7,7 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 1. Speed-Setup
+      - name: 1. Setup & Silent Installers
         shell: pwsh
         run: |
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
@@ -21,19 +21,18 @@ jobs:
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
           
-          # RustDesk
-          curl.exe -L -o rustdesk.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
-          Start-Process ./rustdesk.exe -ArgumentList "--install"
+          # RustDesk - Using a shorter name for the local copy
+          curl.exe -L -o rd.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
+          Start-Process ./rd.exe -ArgumentList "--install"
 
-      - name: 2. 60FPS Hardening
+      - name: 2. 60FPS Performance Tweaks
         shell: pwsh
         run: |
           & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f
           & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
-          & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize" /v EnableTransparency /t REG_DWORD /d 0 /f
 
-      - name: 3. MEGA Restore
+      - name: 3. MEGA Sync & Startup
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -51,19 +50,29 @@ jobs:
           }
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Connection
+      - name: 4. Secure Connection (Flexible Path)
         shell: pwsh
         run: |
-          Start-Sleep -Seconds 15
-          & "C:\Program Files\RustDesk\rustdesk.exe" --password "GitHub@2026"
-          $ID = & "C:\Program Files\RustDesk\rustdesk.exe" --get-id
+          # Wait for installation to settle
+          Start-Sleep -Seconds 30
+          
+          # Try to find RustDesk in multiple locations
+          $rdPath = "C:\Program Files\RustDesk\rustdesk.exe"
+          if (!(Test-Path $rdPath)) { $rdPath = "$PWD\rd.exe" }
+          
+          Write-Host "Using RustDesk at: $rdPath"
+          
+          # Set Password and Reveal ID
+          & $rdPath --password "GitHub@2026"
+          $ID = & $rdPath --get-id
+          
           Write-Host "===================================="
           Write-Host " RUSTDESK ID: $ID"
           Write-Host " PASSWORD:    GitHub@2026"
           Write-Host "===================================="
           while ($true) { Start-Sleep -Seconds 3600 }
 
-      - name: 5. Sync
+      - name: 5. Backup Sync
         if: always()
         shell: pwsh
         run: |
