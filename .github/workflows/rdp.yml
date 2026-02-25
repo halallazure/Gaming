@@ -1,42 +1,50 @@
-name: Fixed-1080p-60FPS-Gaming-VM
+name: Final-1080p-60FPS-Gaming-VM
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 1. Install Tools via Chocolatey
+      - name: 1. Install Tools & MEGA (Manual Path)
         shell: pwsh
         run: |
-          # 1. Create system folders
+          # Create folders
           $dirs = "C:\GamingVM\Backup", "C:\GamingVM\Startup"
           foreach ($d in $dirs) { if (!(Test-Path $d)) { New-Item -Path $d -ItemType Directory -Force } }
 
-          # 2. Force High Performance for 60 FPS
+          # Force High Performance
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
 
-          # 3. Install Sunshine, AnyDesk, MEGA, and 7-Zip
-          choco install sunshine anydesk megacmd 7zip -y
+          # Install Sunshine, AnyDesk, and 7-Zip via Choco
+          choco install sunshine anydesk 7zip -y
 
-      - name: 2. Unlock 60 FPS & Restore Data (Verified Direct Paths)
+          # Install MEGA manually to control the path
+          curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
+          Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
+
+      - name: 2. Unlock 60 FPS & Restore Data (Hardcoded Paths)
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Registry Hack for 60 FPS Smoothness
+          # Registry Hack for 60 FPS
           reg add "HKLM\System\CurrentControlSet\Control\Terminal Server\WinStations" /v DWMFRAMEINTERVAL /t REG_DWORD /d 15 /f
           
-          # Force refresh of Path environment
-          $env:Path += ";C:\Program Files\MEGAcmd;C:\Program Files (x86)\MEGAcmd"
+          # DIRECT CALL to the exact installation folder
+          $MEGA = "C:\Program Files\MEGAcmd\mega-login.bat"
+          if (!(Test-Path $MEGA)) { $MEGA = "C:\Program Files (x86)\MEGAcmd\mega-login.bat" }
+          $GET = $MEGA.Replace("mega-login.bat", "mega-get.bat")
           
-          # DIRECT EXECUTION: Using the verified EXE names to prevent "Not Recognized" errors
-          mega-login.exe "$env:M_USER" "$env:M_PASS"
-          mega-get.exe /GamingVM/Data.7z C:\
+          Write-Host "Running MEGA from: $MEGA"
+          
+          # Execute Login and Download
+          & $MEGA "$env:M_USER" "$env:M_PASS"
+          & $GET /GamingVM/Data.7z C:\
           
           if (Test-Path "C:\Data.7z") {
             & "C:\Program Files\7-Zip\7z.exe" x C:\Data.7z -oC:\GamingVM\ -y
-            # Set REALTIME Priority to fix laggy wallpaper
+            # Set REALTIME Priority to fix lag
             Get-ChildItem "C:\GamingVM\Startup" | ForEach-Object {
                 $p = Start-Process $_.FullName -PassThru
                 $p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime
