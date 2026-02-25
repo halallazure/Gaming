@@ -23,26 +23,27 @@ jobs:
         curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
         Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
 
-    - name: 2. Registry & GPU Fluidity Tweaks
+        - name: 2. Registry & GPU Fluidity Tweaks
       shell: pwsh
       run: |
-        # Disable Desktop Composition Redirection lag
-        reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
+        # 1. Disable Desktop Composition Redirection lag
+        reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
         
-        # Force AnyDesk to utilize hardware acceleration and 60FPS target
+        # 2. Force AnyDesk to 60FPS and DirectX mode
         $adConfig = "C:\ProgramData\AnyDesk\system.conf"
         Start-Sleep -Seconds 5
         if (Test-Path $adConfig) {
-          Add-Content $adConfig "ad.display.directx=1"
-          Add-Content $adConfig "ad.display.fps=60"
-          Add-Content $adConfig "ad.display.quality=1" # Prioritize quality over speed
+          Add-Content $adConfig "`nad.display.directx=1"
+          Add-Content $adConfig "`nad.display.fps=60"
+          Add-Content $adConfig "`nad.display.quality=1"
         }
         
-        # Set High Performance Power Plan
-        powercfg /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        # 3. Set High Performance Power Plan
+        powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
         
-        # Compact OS to free up IOPS for the live wallpaper
-        [span_4](start_span)compact.exe /compactos:always[span_4](end_span)
+        # 4. Compact OS (Fix for the ParserError)
+        & compact.exe /compactos:always
+
 
     - name: 3. Credential Injection & ID Reveal
       shell: pwsh
