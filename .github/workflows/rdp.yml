@@ -1,4 +1,4 @@
-name: Ultimate-Gaming-VM-RustDesk-FIXED
+name: Ultimate-Gaming-VM-RustDesk-FORCE-ID
 on: workflow_dispatch
 
 jobs:
@@ -7,31 +7,27 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: 1. Setup & Performance Runtimes
+      - name: 1. Speed-Setup & Gaming Runtimes
         shell: pwsh
         run: |
-          # Create Mega Sync Directories
           New-Item -Path "C:\GamingVM\Backup", "C:\GamingVM\Startup" -ItemType Directory -Force
-          
-          # Visual C++ (Critical for 60fps UI)
+          # Visual C++ (Critical for Wallpaper Engine and 60fps UI)
           curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe
           Start-Process ./vc_redist.x64.exe -ArgumentList "/install", "/quiet", "/norestart" -Wait
-          
-          # Install MEGAcmd
+          # MEGAcmd
           curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe
           Start-Process ./mega_setup.exe -ArgumentList "/S" -Wait
-          
-          # Download RustDesk Portable (Direct Binary)
+          # Download RustDesk
           curl.exe -L -o rustdesk.exe https://github.com/rustdesk/rustdesk/releases/download/1.2.3-2/rustdesk-1.2.3-2-x86_64.exe
 
-      - name: 2. 60FPS & GPU Hardening
+      - name: 2. GPU & 60FPS Optimization
         shell: pwsh
         run: |
           & powercfg.exe /s 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
           & reg.exe add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games" /v "GPU Priority" /t REG_DWORD /d 8 /f
           & reg.exe add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f
 
-      - name: 3. MEGA Restore & Dynamic Startup
+      - name: 3. MEGA Sync & Startup
         shell: pwsh
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
@@ -49,37 +45,43 @@ jobs:
           }
           if (Test-Path "C:\GamingVM\Backup\System.reg") { reg import "C:\GamingVM\Backup\System.reg" }
 
-      - name: 4. Secure RustDesk Launch (Bypass Admin Error)
+      - name: 4. Force ID Generation & Reveal
         shell: pwsh
         run: |
-          # 1. Start the service in a way that doesn't trigger the installer
+          # Start RustDesk and wait for it to create config files
           Start-Process ./rustdesk.exe -ArgumentList "--service"
-          Start-Sleep -Seconds 20
+          Write-Host "Waiting 30 seconds for ID generation..." -ForegroundColor Cyan
+          Start-Sleep -Seconds 30
           
-          # 2. Set Password
+          # Force set the password
           & ./rustdesk.exe --password "GitHub@2026"
           
-          # 3. Wait for ID (Retry loop to fix the blank ID error)
-          $ID = ""
-          $count = 0
-          while (-not $ID -and $count -lt 12) {
-             $ID = & ./rustdesk.exe --get-id
-             if (-not $ID) { 
-                Write-Host "Waiting for ID generation..."
-                Start-Sleep -Seconds 5 
-                $count++
+          # DIRECT FILE READ (Fixes the Pipe Error 232 / Missing ID)
+          $idFile = "$env:APPDATA\RustDesk\config\RustDesk.toml"
+          $ID = "NOT_FOUND"
+          
+          if (Test-Path $idFile) {
+             $content = Get-Content $idFile | Out-String
+             if ($content -match 'id = ''(\d+)''') { 
+                $ID = $matches[1] 
+             } elseif ($content -match 'id = "(\d+)"') {
+                $ID = $matches[1]
              }
           }
-          
+
           Write-Host "====================================" -ForegroundColor Green
           Write-Host " RUSTDESK ID: $ID" -ForegroundColor Yellow
           Write-Host " PASSWORD:    GitHub@2026" -ForegroundColor White
-          Write-Host " STATUS:      1080p 60FPS READY" -ForegroundColor Green
+          Write-Host " STATUS:      1080P 60FPS READY" -ForegroundColor Green
           Write-Host "====================================" -ForegroundColor Green
+          
+          if ($ID -eq "NOT_FOUND") {
+             Write-Host "ERROR: ID was not generated. Check if RustDesk is running." -ForegroundColor Red
+          }
           
           while ($true) { Start-Sleep -Seconds 3600 }
 
-      - name: 5. Final Sync
+      - name: 5. Sync
         if: always()
         shell: pwsh
         run: |
