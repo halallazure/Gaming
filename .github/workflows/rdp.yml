@@ -1,56 +1,58 @@
-name: Ultimate-Gaming-VM-V9-EPYC-POWER
+name: Ultimate-Gaming-VM-V10-FIXED
 on: workflow_dispatch
 
 jobs:
   build:
-    # NOTE: To get the 7763 + 16GB RAM, ensure your repo is set to use 'windows-2022' 
-    # or a 'Larger Runner' in your organization settings.
-    runs-on: windows-latest 
-
+    runs-on: windows-latest
     steps:
-      - name: 1. Optimize for AMD EPYC High-Core Count
+      - name: 1. Fix Power & Unlock CPU Cores
         shell: pwsh
         run: |
-          # 1.1 Unlock all CPU cores for Multi-threaded Software Rendering
-          # This tells Windows to stop parking cores and stay at max frequency
-          powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          # 1.1 Fix Power Scheme (Avoid GUID Conflict)
+          $schemeExists = powercfg /l | Select-String "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+          if (!$schemeExists) {
+              powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+          }
           powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          
-          # 1.2 Registry: Increase DirectDraw Performance for CPU Rendering
-          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrDelay /t REG_DWORD /d 10 /f
-          reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v TdrLimitCount /t REG_DWORD /d 5 /f
 
-          # 1.3 Install Thincast (Essential for 1080p/60 on high-end CPUs)
-          choco install thincast-vdm -y --no-progress
+          # 1.2 Force CPU to use ALL cores (No Core Parking)
+          # This is vital for the AMD 7763 to stop lagging
+          powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100
+          powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_PROCESSOR CPMAXCORES 100
 
-      - name: 2. Maximize AnyDesk Encoding Speed
+      - name: 2. Manual Virtual Display & AnyDesk Setup
         shell: pwsh
         run: |
+          # 2.1 Bypass Chocolatey - Use winget for standard tools
+          winget install --id Microsoft.VCRedist.2015+.x64 --quiet --accept-source-agreements
+          
+          # 2.2 Direct Download AnyDesk
           curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
           Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
-          
-          # FORCE AnyDesk to use the High-Performance CPU threads
-          $process = Get-Process AnyDesk -ErrorAction SilentlyContinue
-          if ($process) {
-              $process.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::AboveNormal
-          }
 
-      - name: 3. Connection & "No-Lag" Setup
+          # 2.3 Set AnyDesk Password & Performance
+          echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
+          
+          # Registry tweak to help with "Headless" (No Monitor) lag
+          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v Configuration /t REG_BINARY /d 00 /f
+
+      - name: 3. Connection & CPU Check
         shell: pwsh
         run: |
-          echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          $conf = "C:\ProgramData\AnyDesk\system.conf"
-          while (!(Select-String -Path $conf -Pattern "ad.anynet.id=(.*)")) { Start-Sleep -Seconds 2 }
-          $id = Select-String -Path $conf -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
+          # Show you your real CPU power for this run
+          $cpu = Get-CimInstance Win32_Processor
+          Write-Host "CPU: $($cpu.Name)"
+          Write-Host "Logical Cores: $((Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors)"
           
+          $conf = "C:\ProgramData\AnyDesk\system.conf"
+          $timeout = 0
+          while (!(Select-String -Path $conf -Pattern "ad.anynet.id=(.*)") -and $timeout -lt 20) {
+              Start-Sleep -Seconds 5
+              $timeout++
+          }
+          $id = Select-String -Path $conf -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
           Write-Host "----------------------------"
-          Write-Host "AMD EPYC VM READY"
-          Write-Host "ID: $id"
+          Write-Host "READY! ID: $id"
           Write-Host "----------------------------"
 
-          # Keep the CPU awake and processing frames
-          while($true) { 
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((Get-Random -Maximum 500), (Get-Random -Maximum 500))
-            Start-Sleep -Seconds 10 
-          }
+          while($true) { Start-Sleep -Seconds 3600 }
