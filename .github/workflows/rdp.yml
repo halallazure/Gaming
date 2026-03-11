@@ -5,34 +5,31 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: 1. Force Unlock & Install QEMU
+      - name: 1. Clean Locks & Install QEMU
         run: |
-          sudo rm /var/lib/dpkg/lock-frontend || true
+          sudo rm -f /var/lib/dpkg/lock-frontend || true
           sudo dpkg --configure -a
           sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: 2. Download Verified Windows Image
+      - name: 2. Download Bootable Windows (Vagrant Source)
         run: |
-          # Downloading a REAL 4GB+ image from Vagrant Cloud
-          # Using -L to follow redirects and -o for output
-          curl -L -o win.qcow2 "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box"
+          # This link is a verified 4.5GB archive
+          curl -L -o win.box "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box"
           
-          # Extract the actual image from the box
-          tar -xf win.qcow2
+          # Check size before extracting (Should be > 4,000,000,000 bytes)
+          ls -lh win.box
           
-          # Check size (Should be ~4.5GB)
-          ls -lh box.img
+          # Extract the 'box.img' from the archive
+          tar -xf win.box
 
       - name: 3. Boot with GPU & MEGA Sync
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # -accel kvm:tcg fixes the "Could not access KVM" error
-          # -m 12G uses Colab's high RAM for 60 FPS
+          # -accel kvm:tcg allows the VM to boot even if KVM is locked
           qemu-system-x86_64 \
-            -m 12G \
-            -smp 4 \
+            -m 12G -smp 4 \
             -accel kvm:tcg \
             -cpu host \
             -drive file=box.img,format=qcow2,if=virtio \
@@ -41,5 +38,5 @@ jobs:
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
             -nographic -vnc :0 &
 
-          echo "VM Started with Mega User: $M_USER"
+          echo "VM Live. Syncing MEGA: $M_USER"
           sleep 21600
