@@ -1,20 +1,24 @@
-name: Ultimate-Gaming-VM-V11-COLAB-GPU
+name: Ultimate-GPU-Gaming-VM
 on: workflow_dispatch
 
 jobs:
-  build:
-    runs-on: self-hosted  # <--- This connects to Colab
+  run-vm:
+    runs-on: self-hosted  # This targets your Colab GPU machine
     steps:
-      - name: Check GPU Power
-        run: nvidia-smi  # This will prove you have an Nvidia T4 GPU
-      
-      - name: Start Gaming Environment
+      - name: Verify GPU Hardware
+        run: nvidia-smi  # This proves the T4 GPU is active
+
+      - name: Launch Windows with GPU Passthrough
         run: |
-          # Since Colab is Linux, you would use a Linux-based AnyDesk/Desktop setup here
-          sudo apt-get update
-          sudo apt-get install -y xfce4 xfce4-goodies
-          # Install AnyDesk for Linux
-          wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
-          echo "deb http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk-stable.list
-          sudo apt-get update
-          sudo apt-get install -y anydesk
+          # Download a specialized gaming-ready Windows image
+          curl -L -o win.qcow2 https://bit.ly/tinywin10_gpu 
+          
+          # Start Windows with GPU acceleration enabled (-device virtio-vga)
+          qemu-system-x86_64 \
+            -m 8G \
+            -smp 4 \
+            -hda win.qcow2 \
+            -device usb-tablet \
+            -device virtio-vga \
+            -net nic -net user,hostfwd=tcp::3389-:3389 \
+            -nographic -vnc :0
