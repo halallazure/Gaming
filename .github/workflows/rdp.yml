@@ -5,35 +5,34 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: 1. Install QEMU Tools
+      - name: 1. Setup Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils unzip
+          sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: 2. Extract and Convert Image
-        run: |
-          # Combine all commands into one block to avoid the 'run is defined' error
-          echo "Checking for downloaded files..."
-          if [ -f "WinDev2407Eval.ova" ]; then
-            tar -xvf WinDev2407Eval.ova
-            qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
-            rm *.vmdk WinDev2407Eval.ova
-          else
-            echo "OVA file not found. Ensure the download step completed."
-          fi
-
-      - name: 3. Boot with GPU & MEGA Sync
+      - name: 2. Locate and Boot Disk
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
+          # Find where the file is actually located
+          DISK_PATH=$(find /content/actions-runner/_work/ -name "win.qcow2" | head -n 1)
+          
+          if [ -z "$DISK_PATH" ]; then
+            echo "Disk not found. Checking for VMDK to convert..."
+            VMDK_PATH=$(find /content/actions-runner/_work/ -name "*.vmdk" | head -n 1)
+            qemu-img convert -f vmdk -O qcow2 "$VMDK_PATH" ./win.qcow2
+            DISK_PATH="./win.qcow2"
+          fi
+
+          echo "Booting from: $DISK_PATH"
+          
           qemu-system-x86_64 \
             -m 12G -smp 4 \
             -accel kvm:tcg \
             -cpu host \
-            -drive file=win.qcow2,format=qcow2,if=virtio \
+            -drive file="$DISK_PATH",format=qcow2,if=virtio \
             -device virtio-vga \
-            -usb -device usb-tablet \
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
             -nographic -vnc :0 &
           
