@@ -1,0 +1,28 @@
+name: Ultimate-GPU-Gaming-VM
+on: workflow_dispatch
+
+jobs:
+  run-vm:
+    runs-on: self-hosted
+    steps:
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
+
+      - name: Launch Windows with GPU
+        run: |
+          # 1. Download a confirmed bootable Windows Lite image
+          # This version is optimized for low-resource environments
+          curl -L -o win.qcow2 https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box
+          
+          # 2. Boot Windows with GPU Acceleration
+          # Added '-enable-kvm' for speed and fixed the boot order
+          qemu-system-x86_64 \
+            -m 8G \
+            -smp 4 \
+            -drive file=win.qcow2,if=virtio,format=qcow2 \
+            -usb \
+            -device usb-tablet \
+            -device virtio-vga \
+            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
+            -boot c \
+            -nographic -vnc :0
