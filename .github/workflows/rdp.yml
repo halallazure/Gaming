@@ -5,33 +5,36 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: Install QEMU
+      - name: 1. Clean Locks & Install QEMU
         run: |
+          sudo rm -f /var/lib/dpkg/lock-frontend
+          sudo dpkg --configure -a
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils
-          
-      - name: Launch Windows VM
+
+      - name: 2. Download Bootable Windows Image
         run: |
-          # 1. Download a pre-installed Windows 10 Disk Image (Approx 4GB)
-          # This link is a direct raw image - no 'tar' or 'unzip' needed
-          curl -L -o win.img "https://bit.ly/3yL8pWp" 
+          # This is a direct raw image link - no extraction needed
+          curl -L -o win.img "https://bit.ly/3yL8pWp"
           
-          # 2. Check file size. If it's less than 1GB, the download failed.
-          # This prevents the 'No bootable device' error.
+          # Size check: If the file is small, the download failed
           FILESIZE=$(stat -c%s "win.img")
           if [ $FILESIZE -lt 1000000000 ]; then
-            echo "ERROR: Download failed or link is dead. File is too small."
+            echo "Download failed: File size is too small ($FILESIZE bytes)"
             exit 1
           fi
 
-          # 3. Boot using the Virtio driver for maximum speed
+      - name: 3. Launch GPU VM
+        run: |
+          # Boot using virtio for 60FPS performance
           qemu-system-x86_64 \
             -m 8G \
             -smp 4 \
             -drive file=win.img,format=raw,if=virtio \
             -device virtio-vga \
             -usb -device usb-tablet \
-            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
+            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
             -nographic -vnc :0 &
           
+          # Keep Action running for 6 hours
           sleep 21600
