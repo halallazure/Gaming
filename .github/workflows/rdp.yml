@@ -3,17 +3,22 @@ on: workflow_dispatch
 
 jobs:
   run-vm:
-    runs-on: self-hosted  # This targets your Colab GPU machine
+    runs-on: self-hosted
     steps:
-      - name: Verify GPU Hardware
-        run: nvidia-smi  # This proves the T4 GPU is active
-
-      - name: Launch Windows with GPU Passthrough
+      - name: Install QEMU and Tools
         run: |
-          # Download a specialized gaming-ready Windows image
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils
+          
+      - name: Verify GPU Hardware
+        run: nvidia-smi
+
+      - name: Launch Windows with GPU
+        run: |
+          # Download the image (using -L to follow redirects)
           curl -L -o win.qcow2 https://bit.ly/tinywin10_gpu 
           
-          # Start Windows with GPU acceleration enabled (-device virtio-vga)
+          # Start Windows with the correct QEMU command
           qemu-system-x86_64 \
             -m 8G \
             -smp 4 \
