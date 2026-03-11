@@ -10,19 +10,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils unzip wget
 
-            - name: 2. Download and Extract MS Image
+                  - name: 2. Extract and Convert Image
         run: |
-          # 1. Open the OVA (It is secretly a tar file)
+          # 1. Extract the disk from the OVA container
           tar -xvf WinDev2407Eval.ova
           
-          # 2. Now that the .vmdk is out, convert it to QCOW2
-          # This creates the final 60FPS gaming disk
+          # 2. Convert the disk to the fast Gaming format (QCOW2)
           qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
           
-          # 3. Clean up the big files to save space in Colab
-          rm *.vmdk WinDev2407Eval.ova win.zip
+          # 3. Delete the old files to free up RAM/Disk space
+          rm *.vmdk WinDev2407Eval.ova
           
-          ls -lh win.qcow2
+          echo "Extraction complete. Ready to boot."
 
       - name: 3. Boot with GPU & MEGA Sync
         env:
