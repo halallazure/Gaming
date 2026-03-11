@@ -10,18 +10,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils unzip wget
 
-      - name: 2. Download Official MS Image
+            - name: 2. Download and Extract MS Image
         run: |
-          # Official Microsoft VM Image (Direct & Permanent)
-          wget -O win.zip "https://aka.ms/windev_VM_virtualbox"
+          # 1. Open the OVA (It is secretly a tar file)
+          tar -xvf WinDev2407Eval.ova
           
-          # Unzip to get the disk image
-          unzip win.zip
-          
-          # Convert VirtualBox format to QCOW2 for QEMU
+          # 2. Now that the .vmdk is out, convert it to QCOW2
+          # This creates the final 60FPS gaming disk
           qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
           
-          # Check size
+          # 3. Clean up the big files to save space in Colab
+          rm *.vmdk WinDev2407Eval.ova win.zip
+          
           ls -lh win.qcow2
 
       - name: 3. Boot with GPU & MEGA Sync
