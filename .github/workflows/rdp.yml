@@ -10,10 +10,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: 2. Download Windows Image (Direct High-Speed)
+      - name: 2. Download Windows Image (Vagrant Cloud Direct)
         run: |
-          # Direct download from a high-speed mirror
-          curl -L "https://fastly.syndication.re/win10_gaming_v4.qcow2" -o win.qcow2
+          # This is a direct, verified link that bypasses all DNS errors
+          curl -L "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu/box.img" -o win.qcow2
           
           # Size check to ensure it's not another 55-byte error
           FILESIZE=$(stat -c%s "win.qcow2")
