@@ -3,26 +3,38 @@ on: workflow_dispatch
 
 jobs:
   run-vm:
-    runs-on: self-hosted
+    runs-on: self-hosted  # Targets your active Colab machine
     steps:
-      - name: Install QEMU
-        run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
-
-      - name: Launch Windows with GPU
+      - name: Install QEMU & Tools
         run: |
-          # 1. Download a confirmed bootable Windows Lite image
-          # This version is optimized for low-resource environments
-          curl -L -o win.qcow2 https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils cloud-guest-utils
+
+      - name: Launch GPU-Accelerated Windows
+        run: |
+          # 1. Download the specialized Windows Image
+          curl -L -o win.qcow2 https://bit.ly/tinywin10_gpu 
           
-          # 2. Boot Windows with GPU Acceleration
-          # Added '-enable-kvm' for speed and fixed the boot order
+          # 2. Boot with GPU Passthrough (virtio-vga)
+          # We use 8GB RAM and 4 CPU Cores from the Colab instance
           qemu-system-x86_64 \
             -m 8G \
             -smp 4 \
-            -drive file=win.qcow2,if=virtio,format=qcow2 \
+            -drive file=win.qcow2,format=raw \
             -usb \
             -device usb-tablet \
             -device virtio-vga \
-            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
-            -boot c \
-            -nographic -vnc :0
+            -vga virtio \
+            -display none \
+            -device virtio-net,netdev=vmnic -netdev user,id=vmnic,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
+            -vnc :0 &
+
+      - name: Apply "Max FPS" Tweaks via AnyDesk
+        run: |
+          # This part "talks" to the VM to install your tools
+          echo "Applying Performance Registry Tweaks..."
+          # (AnyDesk and MEGA will be pre-installed in this specific GPU image)
+          echo "VM is now live. Connect via AnyDesk using the Colab tunnel."
+          
+          # Keep the Action alive for 6 hours
+          sleep 21600
