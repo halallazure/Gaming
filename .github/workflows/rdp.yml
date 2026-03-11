@@ -4,7 +4,10 @@ on: workflow_dispatch
 jobs:
   run-vm:
     # Use these specific labels to match your Colab Runner
-    runs-on: [self-hosted, Linux, X64] 
+    runs-on: self-hosted
+# Or to be safe, use:
+# runs-on: [self-hosted, Linux, X64]
+
     steps:
       - name: Install QEMU
         run: sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
