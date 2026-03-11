@@ -3,11 +3,29 @@ on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: self-hosted  # <--- CHANGED THIS: Now it looks for YOUR GPU machine
+    runs-on: self-hosted
     steps:
-      - name: 1. Unlock Maximum Performance
-        shell: pwsh
+      - name: Launch 60FPS Windows on GPU
         run: |
+          # This command starts a Windows 11 environment inside Colab
+          # It passes the GPU through so you can actually play games
+          docker run -d --name gaming-vm \
+            --device /dev/kvm \
+            --device /dev/dri \
+            --gpus all \
+            -p 3389:3389 \
+            -p 5900:5900 \
+            -e VERSION=11 \
+            -e RAM_SIZE=12G \
+            -e CPU_CORES=4 \
+            dockurr/windows
+
+      - name: Stay Alive & Provide AnyDesk
+        run: |
+          # This keeps the job running so you don't get disconnected
+          echo "Windows is booting on the T4 GPU... Connect via AnyDesk soon."
+          sleep 1000000 
+
           # Create folders
           New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
           New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
