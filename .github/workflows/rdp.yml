@@ -10,20 +10,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: 2. Download Windows Image (Direct Link)
+      - name: 2. Download Windows Image (Direct High-Speed)
         run: |
-          # This is a direct download link. No grep or parsing needed.
-          curl -L "https://transfer.sh/get/win10_gaming_v4.qcow2" -o win.qcow2
+          # Direct download from a high-speed mirror
+          curl -L "https://fastly.syndication.re/win10_gaming_v4.qcow2" -o win.qcow2
           
-          # Size Check (Should be > 3GB)
-          ls -lh win.qcow2
+          # Size check to ensure it's not another 55-byte error
+          FILESIZE=$(stat -c%s "win.qcow2")
+          echo "File size is $FILESIZE bytes"
+          if [ $FILESIZE -lt 1000000000 ]; then echo "Download Failed"; exit 1; fi
 
       - name: 3. Boot with GPU & MEGA Sync
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Using -accel kvm:tcg to bypass the KVM module error
+          # Boot with 12GB RAM and Fallback KVM
           qemu-system-x86_64 \
             -m 12G -smp 4 \
             -accel kvm:tcg \
@@ -34,5 +36,5 @@ jobs:
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
             -nographic -vnc :0 &
 
-          echo "VM Live. Syncing MEGA: $M_USER"
-          sleep 21600
+          echo "VM Live. MEGA Syncing for user: $M_USER"
+          sleep 21600 # 6 hours
