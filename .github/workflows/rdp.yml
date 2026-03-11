@@ -5,44 +5,69 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
-      - name: 1. Launch 60FPS Windows Container
+      - name: 1. Launch 60FPS Windows Container (KVM Bypass)
         run: |
-          # Start the Windows container with GPU and KVM acceleration
-          # We use 12GB RAM and 4 Cores to ensure Elden Ring/Cyberpunk stability
+          # Start Windows with GPU support but without KVM to prevent the crash
           docker run -d --name gaming_vm \
-            --device /dev/kvm \
             --gpus all \
             -p 3389:3389 \
             -e VERSION=11 \
             -e RAM_SIZE=12G \
             -e CPU_CORES=4 \
+            -e KVM=N \
             dockurr/windows
 
-      - name: 2. Inject Gaming Configuration
+      - name: 2. Unlock Performance & Setup MEGA/AnyDesk
+        shell: bash
+        env:
+          M_USER: ${{ secrets.MEGA_EMAIL }}
+          M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Wait for Windows to initialize
-          echo "Waiting for Windows to boot..."
-          sleep 60
+          echo "Waiting for Windows to boot (Software Emulation)..."
+          sleep 180
           
-          # This part "talks" to the Windows container to set up your AnyDesk/MEGA
-          # It uses your logic but wrapped for the Docker environment
-          docker exec -it gaming_vm powershell -Command "
+          # Inject your exact logic inside the Windows container
+          docker exec -i gaming_vm powershell -Command "
+            # Setup Folders
+            New-Item -Path 'C:\GamingVM\Backup' -ItemType Directory -Force;
             New-Item -Path 'C:\GamingVM\Startup' -ItemType Directory -Force;
+            
+            # Performance Tweaks
             powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c;
             reg add 'HKEY_CURRENT_USER\Control Panel\Desktop' /v UserPreferencesMask /t REG_BINARY /d 9012038010000000 /f;
+            
+            # Install Software
+            curl.exe -L -o vc_redist.x64.exe https://aka.ms/vs/17/release/vc_redist.x64.exe;
+            Start-Process ./vc_redist.x64.exe -ArgumentList '/install /quiet /norestart' -Wait;
+            curl.exe -L -o mega_setup.exe https://mega.nz/MEGAcmdSetup64.exe;
             curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe;
+            Start-Process ./mega_setup.exe -ArgumentList '/S' -Wait;
             Start-Process ./anydesk.exe -ArgumentList '--install C:\AnyDesk --start-with-win --silent' -Wait;
-            echo 'GitHub@2026' | & 'C:\AnyDesk\AnyDesk.exe' --set-password;
+            
+            # MEGA Login and Sync
+            \$m = \"\$env:LOCALAPPDATA\MEGAcmd\";
+            Start-Process \"\$m\MEGAcmdServer.exe\" -WindowStyle Hidden;
+            Start-Sleep -Seconds 30;
+            & \"\$m\mega-login.bat\" '${{ env.M_USER }}' '${{ env.M_PASS }}';
+            & \"\$m\mega-get.bat\" /GamingVM/Data.7z C:\;
+            
+            if (Test-Path 'C:\Data.7z') {
+              7z x C:\Data.7z -oC:\GamingVM\ -y;
+              Get-ChildItem 'C:\GamingVM\Startup' | ForEach-Object {
+                  \$p = Start-Process \$_.FullName -PassThru;
+                  \$p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::RealTime;
+              };
+            }
           "
 
       - name: 3. Connection & Stay Alive
         run: |
-          # Get the ID and keep the Colab runner active
-          echo "AnyDesk is ready. Connect using the ID from the Windows screen."
-          docker exec -it gaming_vm powershell -Command "
+          # Set AnyDesk Password and Output ID
+          docker exec -i gaming_vm powershell -Command "
+            echo 'GitHub@2026' | & 'C:\AnyDesk\AnyDesk.exe' --set-password;
             \$idFile = 'C:\ProgramData\AnyDesk\system.conf';
             while (!(Test-Path \$idFile)) { Start-Sleep -Seconds 5 };
             Select-String -Path \$idFile -Pattern 'ad.anynet.id=(.*)' | % { Write-Host 'ANYDESK ID: ' \$_.Matches.Groups[1].Value }
           "
-          # Keep the job running forever
-          sleep 1000000
+          # Keep the Colab session alive
+          while true; do sleep 3600; done
