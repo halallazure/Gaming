@@ -1,58 +1,20 @@
-name: Ultimate-Gaming-VM-V10-FIXED
+name: Ultimate-Gaming-VM-V11-COLAB-GPU
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: self-hosted  # <--- This connects to Colab
     steps:
-      - name: 1. Fix Power & Unlock CPU Cores
-        shell: pwsh
+      - name: Check GPU Power
+        run: nvidia-smi  # This will prove you have an Nvidia T4 GPU
+      
+      - name: Start Gaming Environment
         run: |
-          # 1.1 Fix Power Scheme (Avoid GUID Conflict)
-          $schemeExists = powercfg /l | Select-String "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
-          if (!$schemeExists) {
-              powercfg /duplicatescheme e9a42b02-d5df-448d-aa00-03f14749eb61 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-          }
-          powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-
-          # 1.2 Force CPU to use ALL cores (No Core Parking)
-          # This is vital for the AMD 7763 to stop lagging
-          powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_PROCESSOR CPMINCORES 100
-          powercfg /SETACVALUEINDEX SCHEME_CURRENT SUB_PROCESSOR CPMAXCORES 100
-
-      - name: 2. Manual Virtual Display & AnyDesk Setup
-        shell: pwsh
-        run: |
-          # 2.1 Bypass Chocolatey - Use winget for standard tools
-          winget install --id Microsoft.VCRedist.2015+.x64 --quiet --accept-source-agreements
-          
-          # 2.2 Direct Download AnyDesk
-          curl.exe -L -o anydesk.exe https://download.anydesk.com/AnyDesk.exe
-          Start-Process ./anydesk.exe -ArgumentList "--install C:\AnyDesk --start-with-win --silent" -Wait
-
-          # 2.3 Set AnyDesk Password & Performance
-          echo "GitHub@2026" | & "C:\AnyDesk\AnyDesk.exe" --set-password
-          
-          # Registry tweak to help with "Headless" (No Monitor) lag
-          reg add "HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v Configuration /t REG_BINARY /d 00 /f
-
-      - name: 3. Connection & CPU Check
-        shell: pwsh
-        run: |
-          # Show you your real CPU power for this run
-          $cpu = Get-CimInstance Win32_Processor
-          Write-Host "CPU: $($cpu.Name)"
-          Write-Host "Logical Cores: $((Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors)"
-          
-          $conf = "C:\ProgramData\AnyDesk\system.conf"
-          $timeout = 0
-          while (!(Select-String -Path $conf -Pattern "ad.anynet.id=(.*)") -and $timeout -lt 20) {
-              Start-Sleep -Seconds 5
-              $timeout++
-          }
-          $id = Select-String -Path $conf -Pattern "ad.anynet.id=(.*)" | % { $_.Matches.Groups[1].Value }
-          Write-Host "----------------------------"
-          Write-Host "READY! ID: $id"
-          Write-Host "----------------------------"
-
-          while($true) { Start-Sleep -Seconds 3600 }
+          # Since Colab is Linux, you would use a Linux-based AnyDesk/Desktop setup here
+          sudo apt-get update
+          sudo apt-get install -y xfce4 xfce4-goodies
+          # Install AnyDesk for Linux
+          wget -qO - https://keys.anydesk.com/repos/DEB-GPG-KEY | sudo apt-key add -
+          echo "deb http://deb.anydesk.com/ all main" | sudo tee /etc/apt/sources.list.d/anydesk-stable.list
+          sudo apt-get update
+          sudo apt-get install -y anydesk
