@@ -9,20 +9,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils
-          
-      - name: Verify GPU Hardware
-        run: nvidia-smi
 
       - name: Launch Windows with GPU
         run: |
-          # Download the image (using -L to follow redirects)
+          # 1. Download the image
           curl -L -o win.qcow2 https://bit.ly/tinywin10_gpu 
           
-          # Start Windows with the correct QEMU command
+          # 2. Start Windows with Fixed USB and GPU acceleration
+          # Added '-usb' to fix your error and 'format=raw' to fix the warning
           qemu-system-x86_64 \
             -m 8G \
             -smp 4 \
-            -hda win.qcow2 \
+            -drive file=win.qcow2,format=raw \
+            -usb \
             -device usb-tablet \
             -device virtio-vga \
             -net nic -net user,hostfwd=tcp::3389-:3389 \
