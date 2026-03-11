@@ -10,31 +10,27 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: 2. Locate and Boot Disk
-        env:
-          M_USER: ${{ secrets.MEGA_EMAIL }}
-          M_PASS: ${{ secrets.MEGA_PASSWORD }}
+            - name: 2. Convert and Boot Disk
         run: |
-          # Find where the file is actually located
-          DISK_PATH=$(find /content/actions-runner/_work/ -name "win.qcow2" | head -n 1)
+          # 1. Navigate to the actual workspace folder
+          cd /content/actions-runner/_work/Gaming/Gaming/
           
-          if [ -z "$DISK_PATH" ]; then
-            echo "Disk not found. Checking for VMDK to convert..."
-            VMDK_PATH=$(find /content/actions-runner/_work/ -name "*.vmdk" | head -n 1)
-            qemu-img convert -f vmdk -O qcow2 "$VMDK_PATH" ./win.qcow2
-            DISK_PATH="./win.qcow2"
+          # 2. Check if the disk is already converted
+          if [ ! -f "win.qcow2" ]; then
+            echo "Converting VMDK to QCOW2..."
+            # Using a wildcard for the vmdk name to be safe
+            qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
           fi
 
-          echo "Booting from: $DISK_PATH"
-          
+          echo "Booting VM..."
           qemu-system-x86_64 \
             -m 12G -smp 4 \
             -accel kvm:tcg \
             -cpu host \
-            -drive file="$DISK_PATH",format=qcow2,if=virtio \
+            -drive file=win.qcow2,format=qcow2,if=virtio \
             -device virtio-vga \
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
             -nographic -vnc :0 &
           
-          echo "VM Started! Initializing MEGA Sync..."
+          echo "VM Live. MEGA Syncing..."
           sleep 21600
