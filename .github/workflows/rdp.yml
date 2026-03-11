@@ -5,23 +5,22 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: 1. Install Tools
+      - name: 1. Install QEMU Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils unzip wget
+          sudo apt-get install -y qemu-system-x86 qemu-utils unzip
 
-                  - name: 2. Extract and Convert Image
+      - name: 2. Extract and Convert Image
         run: |
-          # 1. Extract the disk from the OVA container
-          tar -xvf WinDev2407Eval.ova
-          
-          # 2. Convert the disk to the fast Gaming format (QCOW2)
-          qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
-          
-          # 3. Delete the old files to free up RAM/Disk space
-          rm *.vmdk WinDev2407Eval.ova
-          
-          echo "Extraction complete. Ready to boot."
+          # Combine all commands into one block to avoid the 'run is defined' error
+          echo "Checking for downloaded files..."
+          if [ -f "WinDev2407Eval.ova" ]; then
+            tar -xvf WinDev2407Eval.ova
+            qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
+            rm *.vmdk WinDev2407Eval.ova
+          else
+            echo "OVA file not found. Ensure the download step completed."
+          fi
 
       - name: 3. Boot with GPU & MEGA Sync
         env:
@@ -35,8 +34,8 @@ jobs:
             -drive file=win.qcow2,format=qcow2,if=virtio \
             -device virtio-vga \
             -usb -device usb-tablet \
-            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
+            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
             -nographic -vnc :0 &
-
-          echo "VM Live. Syncing MEGA: $M_USER"
-          sleep 21600 # 6-hour session
+          
+          echo "VM Started! Initializing MEGA Sync..."
+          sleep 21600
