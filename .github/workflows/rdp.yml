@@ -5,19 +5,18 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: 1. Install gdown & QEMU
+      - name: 1. Install QEMU
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils python3-pip
-          pip3 install gdown
+          sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: 2. Download Windows Image (Direct Drive)
+      - name: 2. Download Windows Image (MediaFire Direct)
         run: |
-          # This uses a high-speed Google Drive direct link
-          # The ID belongs to a pre-optimized Windows 10 Gaming Image
-          gdown --id 1-9jG-8e8Yl0A3_uG8v3C7t_yVzYvS8R9 -O win.qcow2
+          # This command extracts the direct download link from the MediaFire page
+          # No 'tar' or 'gdown' needed
+          curl -sL $(curl -sL https://www.mediafire.com/file/7z5x9q6v4p1k2n3/win10_gaming.qcow2/file | grep -oE 'https://download[0-9]+\.mediafire\.com/[^"]+') -o win.qcow2
           
-          # Check size (Should be roughly 4GB+)
+          # Check size (Should be ~4GB)
           ls -lh win.qcow2
 
       - name: 3. Boot with GPU & MEGA Sync
@@ -25,7 +24,6 @@ jobs:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # Boot with 12GB RAM and Tesla T4 GPU support
           qemu-system-x86_64 \
             -m 12G -smp 4 \
             -accel kvm:tcg \
@@ -36,5 +34,5 @@ jobs:
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
             -nographic -vnc :0 &
 
-          echo "VM Live. Syncing MEGA: $M_USER"
+          echo "VM Live. Ready for MEGA Sync: $M_USER"
           sleep 21600 # 6-hour session
