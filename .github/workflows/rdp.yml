@@ -3,27 +3,29 @@ on: workflow_dispatch
 
 jobs:
   run-vm:
-    runs-on: [self-hosted, Linux, X64]
-
+    runs-on: self-hosted
     steps:
       - name: GPU & QEMU Setup
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils nvidia-driver-535
+          sudo apt-get install -y qemu-system-x86 qemu-utils
           
       - name: Launch Windows
         run: |
-          # Download a Lite Windows 10 Image (Direct Link)
-          curl -L -o win.qcow2 "https://bit.ly/tinywin10_gpu" 
+          # 1. Download a pre-activated, "No-Setup" Windows Lite image
+          # This version skips the 'Select Country' screen and goes to desktop
+          curl -L -o win.qcow2 "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box"
+          tar -xf win.qcow2
           
-          # Start with GPU Acceleration
+          # 2. Start with GPU and Tablet support (for better mouse control)
           qemu-system-x86_64 \
             -m 8G -smp 4 \
-            -drive file=win.qcow2,format=raw \
+            -drive file=box.img,format=qcow2,if=virtio \
             -usb -device usb-tablet \
             -device virtio-vga \
-            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
-            -vnc :0 &
+            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
+            -boot c \
+            -nographic -vnc :0 &
           
-          # This keeps the Action running so it doesn't close
+          # Keeps it alive for 6 hours
           sleep 21600
