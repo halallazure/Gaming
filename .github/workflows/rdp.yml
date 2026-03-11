@@ -5,30 +5,27 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: Clean Locks & Install QEMU
+      - name: Install QEMU
         run: |
-          sudo fuser -kk /var/lib/dpkg/lock-frontend || true
-          sudo rm -f /var/lib/dpkg/lock-frontend
-          sudo dpkg --configure -a
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86 qemu-utils
-
-      - name: Boot Windows GPU VM
-        run: |
-          # 1. Download TinyWin (Pre-Setup, No 'Select Country' screen)
-          curl -L -o win.qcow2 "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box"
-          tar -xf win.qcow2
           
-          # 2. Launch with NVIDIA Passthrough
+      - name: Launch Windows VM
+        run: |
+          # Downloading a RAW image (No extraction/tar required)
+          # This is a specialized 'Tiny10' build for cloud gaming
+          curl -L -o win.qcow2 "https://bit.ly/tinywin10_gpu" 
+          
+          # Check if the file is valid (Should be > 1GB)
+          ls -lh win.qcow2
+
           qemu-system-x86_64 \
             -m 8G -smp 4 \
-            -drive file=box.img,format=qcow2,if=virtio \
+            -drive file=win.qcow2,format=raw,if=virtio \
             -usb -device usb-tablet \
             -device virtio-vga \
             -vga virtio \
-            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
-            -boot c \
+            -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
             -nographic -vnc :0 &
           
-          # Stay alive for 6 hours
           sleep 21600
