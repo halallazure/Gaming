@@ -5,20 +5,24 @@ jobs:
   run-vm:
     runs-on: self-hosted
     steps:
-      - name: 1. Install QEMU
+      - name: 1. Install Tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils wget
+          sudo apt-get install -y qemu-system-x86 qemu-utils unzip wget
 
-      - name: 2. Download Windows Image (Wget Persistence)
+      - name: 2. Download Official MS Image
         run: |
-          # wget is much better at following cloud redirects than curl
-          wget --trust-server-names -O win.qcow2 "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box"
+          # Official Microsoft VM Image (Direct & Permanent)
+          wget -O win.zip "https://aka.ms/windev_VM_virtualbox"
           
-          # Size check: This MUST be over 1GB or the script stops
-          FILESIZE=$(stat -c%s "win.qcow2")
-          echo "File size is $FILESIZE bytes"
-          if [ $FILESIZE -lt 1000000000 ]; then echo "Download Failed Again"; exit 1; fi
+          # Unzip to get the disk image
+          unzip win.zip
+          
+          # Convert VirtualBox format to QCOW2 for QEMU
+          qemu-img convert -f vmdk -O qcow2 *.vmdk win.qcow2
+          
+          # Check size
+          ls -lh win.qcow2
 
       - name: 3. Boot with GPU & MEGA Sync
         env:
@@ -35,5 +39,5 @@ jobs:
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
             -nographic -vnc :0 &
 
-          echo "VM Live. Ready for MEGA Sync: $M_USER"
+          echo "VM Live. Syncing MEGA: $M_USER"
           sleep 21600 # 6-hour session
