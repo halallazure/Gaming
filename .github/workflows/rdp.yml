@@ -3,7 +3,8 @@ on: workflow_dispatch
 
 jobs:
   run-vm:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, X64]
+
     steps:
       - name: GPU & QEMU Setup
         run: |
