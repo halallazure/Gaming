@@ -12,19 +12,25 @@ jobs:
           
       - name: Launch Windows VM
         run: |
-          # Downloading a RAW image (No extraction/tar required)
-          # This is a specialized 'Tiny10' build for cloud gaming
-          curl -L -o win.qcow2 "https://bit.ly/tinywin10_gpu" 
+          # 1. Download a pre-installed Windows 10 Disk Image (Approx 4GB)
+          # This link is a direct raw image - no 'tar' or 'unzip' needed
+          curl -L -o win.img "https://bit.ly/3yL8pWp" 
           
-          # Check if the file is valid (Should be > 1GB)
-          ls -lh win.qcow2
+          # 2. Check file size. If it's less than 1GB, the download failed.
+          # This prevents the 'No bootable device' error.
+          FILESIZE=$(stat -c%s "win.img")
+          if [ $FILESIZE -lt 1000000000 ]; then
+            echo "ERROR: Download failed or link is dead. File is too small."
+            exit 1
+          fi
 
+          # 3. Boot using the Virtio driver for maximum speed
           qemu-system-x86_64 \
-            -m 8G -smp 4 \
-            -drive file=win.qcow2,format=raw,if=virtio \
-            -usb -device usb-tablet \
+            -m 8G \
+            -smp 4 \
+            -drive file=win.img,format=raw,if=virtio \
             -device virtio-vga \
-            -vga virtio \
+            -usb -device usb-tablet \
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389 \
             -nographic -vnc :0 &
           
