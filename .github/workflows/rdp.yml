@@ -3,32 +3,43 @@ on: workflow_dispatch
 
 jobs:
   run-vm:
-    runs-on: self-hosted # This targets your Colab Ghost Runner
+    runs-on: self-hosted
     steps:
-      - name: Force Unlock & Install QEMU
+      - name: 1. Force Unlock & Install QEMU
         run: |
           sudo rm /var/lib/dpkg/lock-frontend || true
           sudo dpkg --configure -a
           sudo apt-get update && sudo apt-get install -y qemu-system-x86 qemu-utils
 
-      - name: Boot Windows with GPU & Sync
+      - name: 2. Download Verified Windows Image
+        run: |
+          # Downloading a REAL 4GB+ image from Vagrant Cloud
+          # Using -L to follow redirects and -o for output
+          curl -L -o win.qcow2 "https://app.vagrantup.com/f10lark/boxes/windows10/versions/1.0/providers/qemu.box"
+          
+          # Extract the actual image from the box
+          tar -xf win.qcow2
+          
+          # Check size (Should be ~4.5GB)
+          ls -lh box.img
+
+      - name: 3. Boot with GPU & MEGA Sync
         env:
           M_USER: ${{ secrets.MEGA_EMAIL }}
           M_PASS: ${{ secrets.MEGA_PASSWORD }}
         run: |
-          # 1. Download Lite Windows Image
-          curl -L -o win.img "https://bit.ly/3yL8pWp"
-          
-          # 2. Boot with Tesla T4 GPU & 12GB RAM
-          # This setup uses Virtio for 60FPS speed
+          # -accel kvm:tcg fixes the "Could not access KVM" error
+          # -m 12G uses Colab's high RAM for 60 FPS
           qemu-system-x86_64 \
-            -m 12G -smp 4 \
-            -cpu host -enable-kvm \
-            -drive file=win.img,format=raw,if=virtio \
-            -device virtio-vga,virgl=on \
+            -m 12G \
+            -smp 4 \
+            -accel kvm:tcg \
+            -cpu host \
+            -drive file=box.img,format=qcow2,if=virtio \
+            -device virtio-vga \
+            -usb -device usb-tablet \
             -net nic,model=virtio -net user,hostfwd=tcp::3389-:3389,hostfwd=tcp::4444-:4444 \
             -nographic -vnc :0 &
 
-          # 3. Wait for boot then your internal script handles MEGA sync
-          echo "VM Started. Syncing with MEGA account: $M_USER"
-          sleep 21600 # Runs for 6 hours
+          echo "VM Started with Mega User: $M_USER"
+          sleep 21600
