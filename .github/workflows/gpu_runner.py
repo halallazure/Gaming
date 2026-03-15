@@ -71,7 +71,6 @@ while ($true) { Start-Sleep -Seconds 3600 }
 """
 
 print("Step 4: Injecting your original gaming script...")
-# Push the script into the VM's shell
 os.system(f'echo "{your_original_script}" | nc localhost 5900')
 
 print("ALL STEPS COMPLETE. Monitor AnyDesk now.")
