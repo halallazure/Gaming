@@ -15,5 +15,5 @@ jobs:
           key: ${{ secrets.KAGGLE_KEY }}
           title: "Ultimate-Gaming-VM-GPU"
           enable_gpu: "enable"
-          # This forces the exact path to your file
-          code_file: "${{ github.workspace }}/gpu_runner.py"
+          # DO NOT add slashes or variables here. Just the name.
+          code_file: "gpu_runner.py"
