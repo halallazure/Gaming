@@ -8,12 +8,22 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Run Kaggle GPU Engine
-        uses: Frederisk/kaggle-action@v1.0.0
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          username: ${{ secrets.KAGGLE_USERNAME }}
-          key: ${{ secrets.KAGGLE_KEY }}
-          title: "Ultimate-Gaming-VM-GPU"
-          enable_gpu: "enable"
-          # DO NOT add slashes or variables here. Just the name.
-          code_file: "gpu_runner.py"
+          python-version: '3.10'
+
+      - name: Install Kaggle & Run
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          M_USER: ${{ secrets.MEGA_EMAIL }}
+          M_PASS: ${{ secrets.MEGA_PASSWORD }}
+        run: |
+          pip install kaggle
+          mkdir -p ~/.kaggle
+          echo "{\"username\":\"$KAGGLE_USERNAME\",\"key\":\"$KAGGLE_KEY\"}" > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+          
+          # This command pushes your script to Kaggle directly
+          kaggle kernels push -p .
