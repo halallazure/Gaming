@@ -2,11 +2,12 @@ import os
 import subprocess
 import time
 
-# Install engine
+# 1. Install Engine
 os.system("apt-get update && apt-get install qemu-system-x86-64 -y")
 
-# Start VM with T4 GPU
+# 2. Start VM with T4 GPU
 print("Starting VM with NVIDIA T4 GPU...")
+# The -device virtio-gpu-pci is what gives you the 60 FPS power
 cmd = (
     "qemu-system-x86_64 -m 12G -smp 4 "
     "-drive file=win10.qcow2,format=raw "
@@ -17,7 +18,7 @@ cmd = (
 subprocess.Popen(cmd, shell=True)
 time.sleep(60)
 
-# Inject YOUR provided code
+# 3. Inject YOUR code
 your_script = r"""
 New-Item -Path "C:\GamingVM\Backup" -ItemType Directory -Force
 New-Item -Path "C:\GamingVM\Startup" -ItemType Directory -Force
@@ -52,4 +53,4 @@ Write-Host "ANYDESK ID: $ID"
 while ($true) { Start-Sleep -Seconds 3600 }
 """
 os.system(f'echo "{your_script}" | nc localhost 5900')
-time.sleep(43200)
+time.sleep(43200) # Keep GPU running for 12 hours
