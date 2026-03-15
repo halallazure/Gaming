@@ -74,5 +74,5 @@ print("Step 4: Injecting your original gaming script...")
 os.system(f'echo "{your_original_script}" | nc localhost 5900')
 
 print("ALL STEPS COMPLETE. Monitor AnyDesk now.")
-# Keep Kaggle active for 12 hours
+# Keep Kaggle active for 12 hours so it doesn't close on you
 time.sleep(43200)
