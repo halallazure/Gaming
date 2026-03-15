@@ -15,5 +15,5 @@ jobs:
           key: ${{ secrets.KAGGLE_KEY }}
           title: "Ultimate-Gaming-VM-GPU"
           enable_gpu: "enable"
-          # This tells it to look in the main folder
-          code_file: "./gpu_runner.py"
+          # Use the filename directly
+          code_file: "gpu_runner.py"
