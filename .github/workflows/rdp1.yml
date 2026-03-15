@@ -1,0 +1,27 @@
+name: Remote-Lightning-GPU-Gaming
+on: workflow_dispatch
+
+jobs:
+  launch-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Start Lightning GPU
+        run: |
+          pip install lightning-sdk
+          python -c "
+          from lightning_sdk import Studio
+          # Replace 'My-Gaming-Studio' with your Studio name
+          s = Studio('My-Gaming-Studio')
+          s.start() # This turns on the T4 GPU machine
+          
+          # This runs your VM command remotely on the Lightning machine
+          s.run('nohup qemu-system-x86-64 -m 12G -smp 4 -hda win10.qcow2 -device virtio-vga,virgl=on -net nic -net user,hostfwd=tcp::3389-:3389 -vnc :0 > vm.log 2>&1 &')
+          "
+        env:
+          LIGHTNING_API_KEY: ${{ secrets.LIGHTNING_API_KEY }}
+
+      - name: 2. Keep GitHub Active
+        run: |
+          echo "Gaming VM is running on Lightning AI GPU."
+          echo "You can now close your phone and connect via AnyDesk."
+          sleep 21600 # Keeps the GitHub Action 'Running' for 6 hours
