@@ -5,7 +5,9 @@ jobs:
   launch-gpu:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Run Kaggle GPU Engine
         uses: Frederisk/kaggle-action@v1.0.0
         with:
@@ -13,4 +15,5 @@ jobs:
           key: ${{ secrets.KAGGLE_KEY }}
           title: "Ultimate-Gaming-VM-GPU"
           enable_gpu: "enable"
-          code_file: "gpu_runner.py"
+          # This tells it to look in the main folder
+          code_file: "./gpu_runner.py"
