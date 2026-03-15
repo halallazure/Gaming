@@ -2,34 +2,15 @@ name: Ultimate-Gaming-VM-V41-MAX-FPS
 on: workflow_dispatch
 
 jobs:
-  build:
-    runs-on: self-hosted  # This tells GitHub to use your Lightning AI runner
+  launch-gpu:
+    runs-on: ubuntu-latest
     steps:
-      - name: 1. Launch Windows VM with T4 GPU
-        shell: bash
-        run: |
-          # 1. Install QEMU on the Lightning Host
-          sudo apt-get update && sudo apt-get install qemu-system-x86-64 -y
-          
-          # 2. Start the VM in the background (nohup)
-          # We use virtio-vga and virgl to pass the T4 GPU power into Windows
-          nohup qemu-system-x86-64 -m 12G -smp 4 \
-          -hda win10.qcow2 \
-          -device virtio-vga,virgl=on \
-          -net nic -net user,hostfwd=tcp::3389-:3389 \
-          -display none -vnc :0 > vm.log 2>&1 &
-          
-          echo "✅ Windows VM is booting with GPU acceleration..."
-          sleep 60
-
-      - name: 2. Apply Your MAX-FPS Tweaks
-        shell: bash
-        run: |
-          echo "Please connect via AnyDesk to run your PowerShell script."
-          echo "The T4 GPU is now active. Your 60 FPS tweaks will work."
-          
-          # This keeps the GitHub Action 'Running' so it doesn't close
-          while true; do
-            echo "Heartbeat: VM is Online..."
-            sleep 300
-          done
+      - uses: actions/checkout@v4
+      - name: Run Kaggle GPU Engine
+        uses: Frederisk/kaggle-action@v1.0.0
+        with:
+          username: ${{ secrets.KAGGLE_USERNAME }}
+          key: ${{ secrets.KAGGLE_KEY }}
+          title: "Ultimate-Gaming-VM-GPU"
+          enable_gpu: "enable"
+          code_file: "gpu_runner.py"
